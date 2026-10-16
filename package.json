@@ -93,6 +93,10 @@
         "command": "agentville.showThisProjectOnly",
         "title": "AgentVille: Show This Project Only",
         "icon": "$(folder)"
+      },
+      {
+        "command": "agentville.resetProgress",
+        "title": "AgentVille: Reset Office Progress"
       }
     ],
     "menus": {
@@ -155,6 +159,12 @@
           "default": false,
           "scope": "window",
           "description": "Show Claude Code sessions from every project, not only the folders open in this window. Sessions that ended more than an hour ago are still hidden."
+        },
+        "agentville.progression.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Let agent types earn XP, levels and achievements, and unlock office decoration. Progress is stored only on this machine. When disabled, nothing accrues and the office hides the game layer."
         }
       }
     }

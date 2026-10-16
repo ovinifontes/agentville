@@ -3,7 +3,8 @@
 // Ordering and the visible cap live here (pure) rather than in the webview, so both are
 // unit-tested and deterministic — the office must never reshuffle between refreshes.
 
-import type { AgentView } from './officeTypes';
+import { agentTypes } from './progressRules';
+import type { AgentView, ProgressView } from './officeTypes';
 import type { Session, SubAgent } from './types';
 
 export const MAX_VISIBLE_AGENTS = 24;
@@ -63,14 +64,22 @@ function byRelevance(a: AgentView, b: AgentView): number {
   return b.lastActivityAt - a.lastActivityAt;
 }
 
+/** Each agent gets its type's level (spec G3/G4); a type with no XP yet is level 1. */
+function withLevels(agents: AgentView[], sessions: readonly Session[], progress: ProgressView): AgentView[] {
+  const types = agentTypes(sessions);
+  const levels = new Map(progress.rows.map((row) => [row.type, row.level]));
+  return agents.map((agent) => ({ ...agent, level: levels.get(types.get(agent.id) ?? '') ?? 1 }));
+}
+
 export function buildSnapshot(
   sessions: readonly Session[],
   actions: ReadonlyMap<string, string>,
+  progress?: ProgressView,
 ): { agents: AgentView[]; truncated: number } {
-  const all = sessions
+  const views = sessions
     .flatMap(sessionViews)
-    .map((agent) => (agent.status === 'working' ? { ...agent, action: actions.get(agent.id) } : agent))
-    .sort(byRelevance);
+    .map((agent) => (agent.status === 'working' ? { ...agent, action: actions.get(agent.id) } : agent));
+  const all = (progress?.enabled ? withLevels(views, sessions, progress) : views).sort(byRelevance);
 
   return {
     agents: all.slice(0, MAX_VISIBLE_AGENTS),

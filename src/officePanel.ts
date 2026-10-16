@@ -7,6 +7,7 @@ import { buildSnapshot } from './officeSnapshot';
 import { RecentEntryStore } from './recentEntries';
 import { SubagentTranscriptReader, workingTranscripts } from './subagentTranscriptReader';
 import { logDebug } from './logger';
+import type { ProgressStore } from './progressStore';
 import type { SessionTreeDataProvider } from './sessionTreeDataProvider';
 import type { ToExtension, ToWebview } from './officeTypes';
 import type { Session } from './types';
@@ -94,6 +95,12 @@ const OFFICE_CSS = `
   }
 `;
 
+/** What the office mirrors: live sessions and office progression. */
+export interface OfficeSources {
+  provider: SessionTreeDataProvider;
+  progress: ProgressStore;
+}
+
 export class OfficePanel {
   private static current: OfficePanel | undefined;
 
@@ -104,7 +111,7 @@ export class OfficePanel {
   private openFeedAgentId: string | undefined;
   private webviewReady = false;
 
-  static show(context: vscode.ExtensionContext, provider: SessionTreeDataProvider): void {
+  static show(context: vscode.ExtensionContext, sources: OfficeSources): void {
     if (OfficePanel.current) {
       OfficePanel.current.panel.reveal(vscode.ViewColumn.Active);
       return;
@@ -115,13 +122,13 @@ export class OfficePanel {
       // dist/ holds both the webview bundle and the office art (copied by esbuild.js).
       localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist')],
     });
-    OfficePanel.current = new OfficePanel(panel, context, provider);
+    OfficePanel.current = new OfficePanel(panel, context, sources);
   }
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
     context: vscode.ExtensionContext,
-    private readonly provider: SessionTreeDataProvider,
+    private readonly sources: OfficeSources,
   ) {
     panel.webview.html = this.html(context.extensionUri);
 
@@ -132,8 +139,11 @@ export class OfficePanel {
       panel.webview.onDidReceiveMessage((message: ToExtension) => {
         this.onMessage(message);
       }),
-      provider.onDidChangeSessions(() => {
+      sources.provider.onDidChangeSessions(() => {
         this.push();
+      }),
+      sources.progress.onDidChange(() => {
+        this.pushProgress();
       }),
       panel.onDidChangeViewState(() => {
         this.onViewState();
@@ -144,6 +154,7 @@ export class OfficePanel {
   private onViewState(): void {
     if (this.panel.visible) {
       this.push();
+      this.pushProgress();
     } else {
       // The webview (and its side panel) is destroyed while hidden.
       this.openFeedAgentId = undefined;
@@ -155,6 +166,7 @@ export class OfficePanel {
       case 'ready':
         this.webviewReady = true;
         this.push();
+        this.pushProgress();
         return;
       case 'openFeed':
         this.openFeedAgentId = message.agentId;
@@ -169,11 +181,14 @@ export class OfficePanel {
       case 'openProject':
         void vscode.commands.executeCommand('agentville.openProject', this.itemFor(message.agentId));
         return;
+      case 'achievementsShown':
+        this.sources.progress.markToastsShown(message.ids);
+        return;
     }
   }
 
   private itemFor(agentId: string): { session: Session } | undefined {
-    const session = this.provider.getSessions().find((s) => s.id === agentId);
+    const session = this.sources.provider.getSessions().find((s) => s.id === agentId);
     return session ? { session } : undefined;
   }
 
@@ -191,9 +206,9 @@ export class OfficePanel {
       return;
     }
     try {
-      const sessions = this.provider.getSessions();
+      const sessions = this.sources.provider.getSessions();
       this.refreshActions(sessions);
-      const { agents, truncated } = buildSnapshot(sessions, this.actions);
+      const { agents, truncated } = buildSnapshot(sessions, this.actions, this.sources.progress.current());
       const ids = agents.map((a) => a.id);
       // The open feed's agent keeps its last entries after it leaves, until the panel closes.
       this.entries.retain(this.openFeedAgentId ? [...ids, this.openFeedAgentId] : ids);
@@ -204,6 +219,13 @@ export class OfficePanel {
       }
     } catch (error) {
       logDebug(`OfficePanel.push failed: ${String(error)}`);
+    }
+  }
+
+  /** Post the progress view. Like push(), never while hidden; independent of monitoring. */
+  private pushProgress(): void {
+    if (this.webviewReady && this.panel.visible) {
+      this.post({ type: 'progress', progress: this.sources.progress.current() });
     }
   }
 

@@ -130,6 +130,11 @@ function flatten(sessions: readonly Session[]): Flat[] {
   ]);
 }
 
+/** Each agent's type (spec G3) by id, exactly as accrual sees it. */
+export function agentTypes(sessions: readonly Session[]): Map<string, string> {
+  return new Map(flatten(sessions).map((f) => [f.id, f.type]));
+}
+
 function addStats(types: Record<string, TypeStats>, type: string, delta: TypeStats) {
   const cur = Object.hasOwn(types, type) ? types[type] : { workMs: 0, runs: 0 };
   // Computed key in a literal defines an own property, so a type named "__proto__" is safe.

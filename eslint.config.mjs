@@ -18,6 +18,7 @@ const VSCODE_LAYER_MODULES = [
   'treeItems',
   'subagentTreeChildren',
   'officePanel',
+  'progressStore',
 ];
 const VSCODE_LAYER_GLOB = `src/{${VSCODE_LAYER_MODULES.join(',')}}.ts`;
 // Negated rather than a plain `src/*.ts` catch-all: categories match independently, so

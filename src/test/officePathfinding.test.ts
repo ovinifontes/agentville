@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DOOR, TILE_SIZE, isWalkable, walkableTiles } from '../webview/simulation/world';
+import { DOOR, TILE_SIZE, isWalkable, tileAt, walkableTiles } from '../webview/simulation/world';
 import { findPath, reachableTiles } from '../webview/simulation/pathfinding';
 import { reconcile, type Character } from '../webview/simulation/population';
 import { step, pickTarget } from '../webview/simulation/movement';
@@ -19,6 +19,15 @@ function atDoor(): Character {
   return reconcile([], [agent])[0];
 }
 
+/** On a chair or sofa tile (a seat). */
+function onSeat(point: { x: number; y: number }): boolean {
+  return 'CS'.includes(tileAt(Math.floor(point.x / TILE_SIZE), Math.floor(point.y / TILE_SIZE)));
+}
+
+function key(point: { x: number; y: number }): string {
+  return `${String(point.x)},${String(point.y)}`;
+}
+
 function expectValidPath(from: { x: number; y: number }, path: { x: number; y: number }[]): void {
   let previous = from;
   for (const point of path) {
@@ -30,8 +39,39 @@ function expectValidPath(from: { x: number; y: number }, path: { x: number; y: n
 }
 
 describe('pathfinding', () => {
-  it('reaches every walkable tile from the door', () => {
-    expect(reachableTiles(DOOR.x, DOOR.y)).toHaveLength(walkableTiles().length);
+  it('reaches every walkable floor tile from the door, and every seat as a goal', () => {
+    const reachable = new Set(reachableTiles(DOOR.x, DOOR.y).map(key));
+    for (const tile of walkableTiles()) {
+      expect(reachable.has(key(tile))).toBe(true);
+      if (key(tile) === key(DOOR)) {
+        continue; // already there: an empty path
+      }
+      const path = findPath(DOOR, tile);
+      expect(path.at(-1)).toEqual(tile);
+      expectValidPath(DOOR, path);
+    }
+  });
+
+  it('walks between floor tiles on the floor, never across a seat', () => {
+    // Along the chair row (1,3) -> (6,3) is 5 steps over four chairs; the floor route is 7.
+    const from = { x: 1 * TILE_SIZE + 8, y: 3 * TILE_SIZE + 8 };
+    const to = { x: 6 * TILE_SIZE + 8, y: 3 * TILE_SIZE + 8 };
+    const along = findPath(from, to);
+    expect(along).toHaveLength(7);
+    expect(along.some(onSeat)).toBe(false);
+    for (const tile of walkableTiles().filter((t) => !onSeat(t))) {
+      expect(findPath(DOOR, tile).some(onSeat)).toBe(false);
+      expect(findPath(from, tile).some(onSeat)).toBe(false);
+    }
+  });
+
+  it('leaves a seat it starts on and enters a seat it ends on, but crosses none between', () => {
+    const chair = { x: 2 * TILE_SIZE + 8, y: 3 * TILE_SIZE + 8 };
+    const sofa = { x: 3 * TILE_SIZE + 8, y: 15 * TILE_SIZE + 8 };
+    const path = findPath(chair, sofa);
+    expect(path.at(-1)).toEqual(sofa);
+    expectValidPath(chair, path);
+    expect(path.slice(0, -1).some(onSeat)).toBe(false);
   });
 
   it('routes along 4-adjacent walkable tiles and ends on the target centre', () => {

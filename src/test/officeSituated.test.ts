@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DOOR, OFFICE_MAP, TILE_SIZE, isWalkable, tileAt } from '../webview/simulation/world';
-import { reachableTiles, type Point } from '../webview/simulation/pathfinding';
+import { findPath, type Point } from '../webview/simulation/pathfinding';
 import { reconcile, type Character } from '../webview/simulation/population';
 import { DWELL_MS, IDLE_PAUSE_MS, followActivity, pickTarget, step, type Frame } from '../webview/simulation/movement';
 import { SPOTS, claimSpot, placeFor, type PlaceKind } from '../webview/simulation/situated';
@@ -131,10 +131,11 @@ describe('spots', () => {
     }
   });
 
-  it('can reach every spot from the door', () => {
-    const reachable = new Set(reachableTiles(DOOR.x, DOOR.y).map((p) => `${String(p.x)},${String(p.y)}`));
+  it('can reach every spot from the door as a path goal', () => {
     for (const spot of SPOTS) {
-      expect(reachable.has(`${String(spot.x)},${String(spot.y)}`)).toBe(true);
+      const path = findPath(DOOR, spot);
+      expect(path.at(-1)).toEqual({ x: spot.x, y: spot.y });
+      expectValidPath(DOOR, path);
     }
   });
 

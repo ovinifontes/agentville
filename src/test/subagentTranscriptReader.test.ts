@@ -49,6 +49,14 @@ describe('workingTranscripts', () => {
     ...over,
   });
 
+  it('reads a background agent from its own transcript path, not subagents/', () => {
+    const subagents = [sub('bg', 'working', { transcriptPath: '/logs/proj/bg.jsonl' }), sub('old', 'stopped')];
+    expect(workingTranscripts(session({ subagents }))).toEqual([
+      { id: 's1', path: logFilePath },
+      { id: 'bg', path: '/logs/proj/bg.jsonl' },
+    ]);
+  });
+
   it('reads working subagents and grandchildren even while the session reads stopped', () => {
     const subagents = [
       sub('a', 'working', { agentId: 'raw-a', children: [sub('c', 'working'), sub('d', 'stopped')] }),

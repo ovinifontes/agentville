@@ -52,7 +52,7 @@ export function workingTranscripts(session: Session): Array<{ id: string; path: 
     .filter((subagent) => subagent.status === 'working')
     .map((subagent) => ({
       id: subagent.id,
-      path: subagentTranscriptPath(session.logFilePath, subagent.agentId ?? subagent.id),
+      path: subagent.transcriptPath ?? subagentTranscriptPath(session.logFilePath, subagent.agentId ?? subagent.id),
     }));
   return [...own, ...subagents];
 }

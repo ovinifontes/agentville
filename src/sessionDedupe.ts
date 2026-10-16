@@ -70,6 +70,7 @@ export function sessionAsSubagent(agent: Session): SubAgent {
     task: agent.sessionTitle || agent.id,
     status: agent.status,
     model: agent.model,
+    transcriptPath: agent.logFilePath,
   };
 }
 

@@ -130,7 +130,12 @@ export class SessionTreeDataProvider implements vscode.TreeDataProvider<TreeItem
 
   /** Sessions exactly as the tree renders them (deduped, nested, filtered). */
   public getSessions(): Session[] {
-    return this.getVisibleSessions();
+    // Copies: the office sees background agents as subagents, but the cached sessions and the
+    // tree's nested map stay untouched.
+    return this.getVisibleSessions().map((session) => ({
+      ...session,
+      subagents: [...session.subagents, ...(this.nestedAgents.get(session.id) ?? [])],
+    }));
   }
 
   public getTreeItem(element: TreeItemType): vscode.TreeItem {

@@ -10,6 +10,9 @@ export interface SubAgent {
   // parentAgentId — see subagentMetadata.ts's attachNestedSubagents). Deliberately one level
   // only — a depth-3 chain (a grandchild's own children) is truncated, not represented here.
   children?: SubAgent[];
+  // Own transcript file, set only for a background agent (a top-level session nested under its
+  // launcher) — it has no `subagents/agent-<id>.jsonl`, so the office reads this path instead.
+  transcriptPath?: string;
 }
 
 export interface Session {

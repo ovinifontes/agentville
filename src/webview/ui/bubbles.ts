@@ -5,7 +5,7 @@
 
 import type { RenderedPosition } from '../render/officeScene';
 import { pruneNodes } from './pruneNodes';
-import { layoutBubbles, type BubbleBox } from './bubbleLayout';
+import { layoutBubbles, stackOrder, type BubbleBox } from './bubbleLayout';
 
 const MAX_BUBBLE_CHARS = 40;
 const GAP_PX = 4;
@@ -14,6 +14,8 @@ export class BubbleLayer {
   private readonly nodes = new Map<string, HTMLButtonElement>();
   // Measured once per text change; the per-frame layout only reads these numbers.
   private readonly sizes = new Map<string, { width: number; height: number }>();
+  // Last paint order applied (stackOrder), so nodes are moved only when it changes.
+  private stackKey = '';
 
   constructor(
     private readonly root: HTMLElement,
@@ -39,6 +41,13 @@ export class BubbleLayer {
       if (node) {
         node.style.transform = `translate(${box.x}px, ${bottoms.get(box.id) ?? box.bottom}px) translate(-50%, -100%)`;
       }
+    }
+    // Bubbles share one z-index, so DOM order decides which overlapping one is on top.
+    const order = stackOrder(boxes);
+    const key = order.join(' ');
+    if (key !== this.stackKey) {
+      this.stackKey = key;
+      this.root.append(...order.flatMap((id) => this.nodes.get(id) ?? []));
     }
   }
 

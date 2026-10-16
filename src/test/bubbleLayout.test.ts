@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { layoutBubbles, MAX_LIFTS, type BubbleBox } from '../webview/ui/bubbleLayout';
+import { layoutBubbles, MAX_LIFTS, stackOrder, type BubbleBox } from '../webview/ui/bubbleLayout';
 
 const box = (id: string, x: number, bottom: number): BubbleBox => ({ id, x, bottom, width: 100, height: 16 });
 
@@ -37,5 +37,13 @@ describe('layoutBubbles', () => {
     const out = layoutBubbles(boxes);
     expect(out.get(`b${String(MAX_LIFTS)}`)).toBe(1000 - MAX_LIFTS * 18);
     expect(out.get(`b${String(MAX_LIFTS + 1)}`)).toBe(out.get(`b${String(MAX_LIFTS)}`));
+  });
+
+  it('stacks bubbles by left edge, so each one under another keeps a visible strip', () => {
+    // Five seated neighbours with no room left to lift: one row, 17.5 px apart, varied widths.
+    // Lefts: b0 129, b1 159.5, b2 139.5, b3 216.5, b4 204 — painted in that order, last on top.
+    const widths = [130, 104, 179, 60, 120];
+    const boxes = widths.map((width, i) => ({ id: `b${String(i)}`, x: 194 + i * 17.5, bottom: 40, width, height: 19 }));
+    expect(stackOrder(boxes)).toEqual(['b0', 'b2', 'b1', 'b4', 'b3']);
   });
 });

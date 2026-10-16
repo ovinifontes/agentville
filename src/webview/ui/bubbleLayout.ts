@@ -48,3 +48,13 @@ export function layoutBubbles(boxes: readonly BubbleBox[]): Map<string, number> 
   }
   return new Map(placed.map((p) => [p.id, p.bottom]));
 }
+
+/**
+ * Paint order for bubbles that still overlap (no room left to lift them): by left edge, the
+ * rightmost-starting last, so on top. Every bubble painted above another then starts further
+ * right, which leaves each one a visible, clickable strip up to the next one's left edge.
+ */
+export function stackOrder(boxes: readonly BubbleBox[]): string[] {
+  const left = (box: BubbleBox): number => box.x - box.width / 2;
+  return [...boxes].sort((a, b) => left(a) - left(b)).map((box) => box.id);
+}

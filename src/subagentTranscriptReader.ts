@@ -11,6 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { extractAction } from './activityExtractor';
+import { splitCompleteLines } from './completeLines';
 import { logDebug } from './logger';
 import type { FeedEntry } from './officeTypes';
 
@@ -65,12 +66,12 @@ function toFeedEntry(entry: unknown): FeedEntry | undefined {
   return { role: type, text: text || (action ?? ''), tool: action, at: timestampOf(typed['timestamp']) };
 }
 
-function readBytes(transcriptPath: string, start: number, end: number): string {
+function readBytes(transcriptPath: string, start: number, end: number): Buffer {
   const fd = fs.openSync(transcriptPath, 'r');
   try {
     const buffer = Buffer.alloc(end - start);
     fs.readSync(fd, buffer, 0, buffer.length, start);
-    return buffer.toString('utf8');
+    return buffer;
   } finally {
     fs.closeSync(fd);
   }
@@ -118,10 +119,11 @@ export class SubagentTranscriptReader {
       // read would start mid-JSON and drop the remainder too, losing the entry for good. So hold
       // the fragment back: don't advance the offset past it, and re-read it whole once finished.
       // A chunk with no newline at all is entirely a fragment and leaves the offset unchanged.
-      const lines = chunk.split('\n');
-      const incompleteTail = chunk.endsWith('\n') ? '' : (lines.pop() ?? '');
-      // Byte length, not `.length`: multibyte UTF-8 would otherwise land the offset mid-character.
-      this.offsets.set(transcriptPath, size - Buffer.byteLength(incompleteTail, 'utf8'));
+      // Split on the raw bytes (completeLines.ts): a chunk can also end mid-character.
+      const { lines, bytes } = splitCompleteLines(chunk);
+      if (bytes > 0) {
+        this.offsets.set(transcriptPath, start + bytes);
+      }
       return parseLines(lines);
     } catch (error) {
       logDebug(`SubagentTranscriptReader.read failed for ${transcriptPath}: ${String(error)}`);

@@ -96,4 +96,31 @@ describe('SubagentTranscriptReader', () => {
     expect(second.entries).toHaveLength(1);
     expect(second.action).toBe('Reading split.ts');
   });
+
+  describe('a read that ends inside a multi-byte character', () => {
+    const line = Buffer.from(assistantLine('Read', { file_path: '/a/configuração.ts' }), 'utf8');
+    // One byte into the two-byte "ã": the fragment on disk ends mid-character.
+    const cut = line.indexOf(Buffer.from('ã', 'utf8')) + 1;
+
+    it('recovers a torn first line once the writer finishes it', () => {
+      fs.writeFileSync(filePath, line.subarray(0, cut));
+      const reader = new SubagentTranscriptReader();
+      expect(reader.read(filePath)).toEqual({ action: undefined, entries: [] });
+
+      fs.appendFileSync(filePath, line.subarray(cut));
+      expect(reader.read(filePath).action).toBe('Reading configuração.ts');
+    });
+
+    it('recovers a torn line after complete ones, and nothing else', () => {
+      fs.writeFileSync(filePath, Buffer.concat([line, line.subarray(0, cut)]));
+      const reader = new SubagentTranscriptReader();
+      expect(reader.read(filePath).entries).toHaveLength(1);
+
+      fs.appendFileSync(filePath, line.subarray(cut));
+      const second = reader.read(filePath);
+      expect(second.entries).toHaveLength(1);
+      expect(second.action).toBe('Reading configuração.ts');
+      expect(reader.read(filePath).entries).toEqual([]);
+    });
+  });
 });

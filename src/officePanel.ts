@@ -35,11 +35,9 @@ const OFFICE_CSS = `
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  /* Raise and enlarge the bubble under the pointer or keyboard focus above its neighbours, still
-     below the overflow chip (z 5) and the feed (z 10). The position is the inline translate
-     property, so scale grows upward from the anchor and the layout's cached size holds. */
-  .bubble { transform-origin: 50% 100%; }
-  .bubble:hover, .bubble:focus-visible { z-index: 4; scale: 1.3; }
+  /* Raise the bubble under the pointer or keyboard focus above its neighbours, still below the
+     overflow chip (z 5) and the feed (z 10). */
+  .bubble:hover, .bubble:focus-visible { z-index: 4; }
   .name-tag {
     position: absolute;
     z-index: 2;

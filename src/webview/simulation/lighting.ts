@@ -2,30 +2,30 @@
 // curve is testable without a clock, a browser or Phaser.
 
 export interface Lighting {
-  /** Overlay colour, 0xRRGGBB. */
+  /** Multiply-blend colour, 0xRRGGBB; darker channels darken the scene more. */
   color: number;
-  /** Overlay opacity, 0..MAX_ALPHA: low enough that characters stay readable. */
+  /** Multiply strength, 0 (no effect) to 1 (full colour). */
   alpha: number;
   /** Desk-monitor glow strength, 0..1. */
   screensGlow: number;
 }
 
 const MINUTES_PER_DAY = 1440;
-export const MAX_ALPHA = 0.4;
+/** Night is also the darkest the scene may get: every channel stays >= 0x4a, so detail stays visible. */
+export const NIGHT = 0x4a5ca0;
 const WARM = 0xff9a3c;
-const NIGHT = 0x0b1a4a;
 
 type Key = readonly [minute: number, color: number, alpha: number, glow: number];
 
-// Linear between keys. Night runs past midnight, so the last key repeats dawn's start a day later.
+// Linear between keys, for a multiply blend (alpha 0 is no effect). Night runs past midnight, so the last key repeats dawn's start a day later.
 // Day is a transparent warm tint, so dusk rises from it and dawn fades back into it.
 const KEYS: readonly Key[] = [
-  [5 * 60, NIGHT, MAX_ALPHA, 1], // night ends, dawn starts
+  [5 * 60, NIGHT, 1, 1], // night ends, dawn starts
   [7 * 60, WARM, 0, 0], // day
   [17 * 60, WARM, 0, 0], // dusk starts
-  [19 * 60, WARM, 0.18, 0.3], // evening starts, turning blue
-  [21 * 60, NIGHT, MAX_ALPHA, 1], // night
-  [29 * 60, NIGHT, MAX_ALPHA, 1], // 05:00 next day
+  [19 * 60, WARM, 0.6, 0.3], // evening starts, turning blue
+  [21 * 60, NIGHT, 1, 1], // night
+  [29 * 60, NIGHT, 1, 1], // 05:00 next day
 ];
 
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;

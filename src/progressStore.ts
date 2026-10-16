@@ -200,18 +200,22 @@ export class ProgressStore implements vscode.Disposable {
 
   private advance(now: number): void {
     const clock = { now, tzOffsetMinutes: new Date(now).getTimezoneOffset() };
-    const state = isProgressionEnabled()
-      ? applyTick(this.doc.state, this.provider.getAllSessions(), clock).state
-      : pauseProgress(this.doc.state);
+    const { state, unlocked } = isProgressionEnabled()
+      ? applyTick(this.doc.state, this.provider.getAllSessions(), clock)
+      : { state: pauseProgress(this.doc.state), unlocked: [] };
     this.doc = { ...this.doc, state };
-    if (docKey(this.doc) !== this.savedKey) this.scheduleSave();
+    if (docKey(this.doc) === this.savedKey) return;
+    // A new achievement is saved at once, so other windows' offices toast it on their next tick.
+    if (unlocked.length > 0) this.save();
+    else this.scheduleSave();
   }
 
   /** At most one tick-driven save per SAVE_DELAY_MS: later changes ride along with the pending one. */
   private scheduleSave(): void {
     this.saveTimer ??= setTimeout(() => {
       this.saveTimer = undefined;
-      if (this.holding) this.save();
+      // An immediate save (a request, an achievement) may already have written everything.
+      if (this.holding && docKey(this.doc) !== this.savedKey) this.save();
     }, SAVE_DELAY_MS);
   }
 

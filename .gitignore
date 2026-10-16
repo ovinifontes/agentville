@@ -43,5 +43,6 @@ vault-obsidian/
 src/zzLintProbe*.ts
 
 # Commercial office tileset — licensed per developer, never redistributed.
-# Optional local override: when present, the build copies it over resources/office/.
+# Optional local override: when present, dev (non-minified) builds copy it over the
+# baseline in dist/office/; release builds never do (esbuild.js).
 resources/office-premium/

@@ -33,23 +33,27 @@ const webviewOptions = {
   logLevel: "info",
 };
 
-// The premium tileset is licensed per developer and never committed. When the directory
-// exists locally its files win over the CC0 baseline; filenames are identical, so nothing
-// downstream branches on which tier is active.
-function applyPremiumAssets() {
+// The office webview loads its art from dist/office/, never from resources/: the build
+// copies the committed CC0 baseline there and, on dev (non-minified) builds only, overlays
+// the premium tileset when it exists locally. The premium pack is licensed per developer and
+// not cleared for redistribution (resources/ASSETS.md), so the minified build that
+// `vscode:prepublish` runs for every .vsix never copies it. dist/office/ is emptied first so
+// a premium file left by an earlier dev build cannot reach a release. Tracked files are never
+// written; filenames are identical, so nothing downstream branches on which tier is active.
+function copyOfficeAssets() {
+  const target = path.join(__dirname, "dist", "office");
   const premium = path.join(__dirname, "resources", "office-premium");
-  const baseline = path.join(__dirname, "resources", "office");
-  if (!fs.existsSync(premium)) {
+  fs.rmSync(target, { recursive: true, force: true });
+  fs.cpSync(path.join(__dirname, "resources", "office"), target, { recursive: true });
+  if (isMinify || !fs.existsSync(premium)) {
     return;
   }
-  for (const file of fs.readdirSync(premium)) {
-    fs.copyFileSync(path.join(premium, file), path.join(baseline, file));
-  }
-  console.log("Applied premium office assets over the baseline.");
+  fs.cpSync(premium, target, { recursive: true });
+  console.log("Applied premium office assets over the baseline (dev build only).");
 }
 
 async function run() {
-  applyPremiumAssets();
+  copyOfficeAssets();
   if (isWatch) {
     for (const options of [extensionOptions, webviewOptions]) {
       const ctx = await esbuild.context(options);

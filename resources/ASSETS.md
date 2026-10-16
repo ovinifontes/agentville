@@ -28,9 +28,13 @@ Full licence text: `resources/office/LICENSE-ASSETS.txt`
 
 ## Premium override (local only, NOT in this repository)
 
-Dropping a licensed commercial pack into `resources/office-premium/`, using the same
-filenames and layout as above, makes the build use it instead of the baseline. The
-directory is gitignored.
+The webview loads its art from `dist/office/`, which the build fills: `esbuild.js` copies
+`resources/office/` there, then — on dev (non-minified) builds only — copies a licensed
+commercial pack from `resources/office-premium/` over it, when that directory exists and uses
+the same filenames and layout as above. The minified build that `vscode:prepublish` runs for
+every `.vsix` never applies the overlay, so releases always ship the CC0 baseline. Tracked
+files under `resources/office/` are never overwritten. The premium directory is gitignored and
+listed in `.vscodeignore`.
 
 **Status: not cleared for release.** The candidate pack (LimeZu _Modern Interiors_)
 permits "edit and use the asset in any commercial or non commercial project" and forbids
@@ -44,4 +48,5 @@ Before any release ships a commercial pack:
 2. Record that confirmation — date, channel, exact wording — in this file.
 3. Add the required credit and link to `NOTICE` and `README.md`.
 
-Until all three are done, releases ship the CC0 baseline.
+Until all three are done, releases ship the CC0 baseline — and even then, shipping it would
+first need the minified-build guard in `esbuild.js` lifted deliberately.

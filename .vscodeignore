@@ -4,9 +4,13 @@
 # https://github.com/<repo>/raw/HEAD/..., so the store loads them from GitHub and
 # the packed copy would never be read. Only resources/icon.png must ship.
 resources/screenshot*.png
+# Commercial office tileset: a local dev override only, never shipped (resources/ASSETS.md).
+# The release build copies only the CC0 baseline into dist/office/.
+resources/office-premium/**
 # Claude Code harness / dev tooling — must never ship in the extension bundle
 .claude/**
 vault-obsidian/**
+.superpowers/**
 graphify-out/**
 .github/**
 docs/**

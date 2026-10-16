@@ -107,10 +107,8 @@ export class OfficePanel {
     const panel = vscode.window.createWebviewPanel('agentville.office', 'AgentVille', vscode.ViewColumn.Active, {
       enableScripts: true,
       retainContextWhenHidden: false,
-      localResourceRoots: [
-        vscode.Uri.joinPath(context.extensionUri, 'dist'),
-        vscode.Uri.joinPath(context.extensionUri, 'resources'),
-      ],
+      // dist/ holds both the webview bundle and the office art (copied by esbuild.js).
+      localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist')],
     });
     OfficePanel.current = new OfficePanel(panel, context, provider);
   }
@@ -235,7 +233,7 @@ export class OfficePanel {
   private html(extensionUri: vscode.Uri): string {
     const webview = this.panel.webview;
     const script = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'webview.js'));
-    const assets = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'resources', 'office'));
+    const assets = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'office'));
     const nonce = Buffer.from(`${Date.now()}-${Math.random()}`).toString('base64').slice(0, 32);
     // Phaser's WebGL renderer needs blob: for its shaders, and its loader fetches images over
     // XHR from the extension resource root. No remote origin is allowed.

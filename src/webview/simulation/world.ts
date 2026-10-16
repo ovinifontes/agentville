@@ -22,7 +22,7 @@ export const OFFICE_MAP: readonly string[] = [
   '#..........#..........#................#',
   '#.DDDD.DDDD#.DDDD.DDDD#...TTTTTTTT.....#',
   '#.CCCC.CCCC#.CCCC.CCCC#...C......C.....#',
-  '#......................#..C......C.....#',
+  '#.........................C......C.....#',
   '#.DDDD.DDDD#.DDDD.DDDD#...TTTTTTTT.....#',
   '#.CCCC.CCCC#.CCCC.CCCC#...............P#',
   '#..........#..........#................#',

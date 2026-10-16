@@ -55,6 +55,10 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
       overflow.textContent = message.truncated > 0 ? `+${message.truncated} waiting` : '';
       overflow.classList.toggle('hidden', message.truncated === 0);
       return;
+    case 'progress':
+      scene.setDecor(message.progress.decor, message.progress.enabled);
+      // Task 6 seam: team panel and achievement toasts are fed from message.progress here.
+      return;
     case 'feed':
       feed.render(message.agentId, message.entries);
       return;

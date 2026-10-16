@@ -12,8 +12,12 @@ import type { AgentView } from '../../officeTypes';
 import { reconcile, SPRITE_VARIANTS, type Character } from '../simulation/population';
 import { followActivity, step } from '../simulation/movement';
 import { NightLight } from './nightLight';
+import { visibleDecor } from '../simulation/decor';
 import { OFFICE_MAP, TILE_SIZE, WORLD_HEIGHT, WORLD_WIDTH } from '../simulation/world';
 
+const DECOR_FRAME = { frameWidth: 16, frameHeight: 16 };
+/** Above the tilemap (depth 0), below the night tint (0.5) so night darkens decoration like the walls. */
+const DECOR_DEPTH = 0.1;
 const CHARACTER_FRAME = { frameWidth: 16, frameHeight: 24 };
 const EMPTY_TILE = -1;
 /** Smallest fit zoom: below this the office is unreadable, so it overflows (clipped) instead. */
@@ -116,6 +120,10 @@ export class OfficeScene extends Phaser.Scene {
   private sleepRequested = false;
   private asleep = false;
   private nightLight?: NightLight;
+  private decor: readonly number[] = [];
+  private decorEnabled = true;
+  private mapDrawn = false;
+  private decorSprites: Phaser.GameObjects.Image[] = [];
 
   constructor(
     private readonly assetsBaseUri: string,
@@ -126,11 +134,14 @@ export class OfficeScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image('tiles', `${this.assetsBaseUri}/tiles.png`);
+    this.load.spritesheet('decor', `${this.assetsBaseUri}/decor.png`, DECOR_FRAME);
     this.load.spritesheet('characters', `${this.assetsBaseUri}/characters.png`, CHARACTER_FRAME);
   }
 
   create(): void {
     this.drawMap();
+    this.mapDrawn = true;
+    this.redrawDecor();
     this.nightLight = new NightLight(this);
     this.createWalkAnimations();
     // The Scale Manager already watches the window and polls the parent's size in its own
@@ -201,6 +212,38 @@ export class OfficeScene extends Phaser.Scene {
   /** Canvas top-left relative to `parent`, as of the last resize. */
   get canvasOrigin(): { left: number; top: number } {
     return { left: this.canvasLeft, top: this.canvasTop };
+  }
+
+  /** Redraws wall decoration only when the unlocked list or the enabled flag actually changes. */
+  setDecor(unlocked: readonly number[], enabled: boolean): void {
+    const same =
+      enabled === this.decorEnabled &&
+      unlocked.length === this.decor.length &&
+      unlocked.every((id, i) => id === this.decor[i]);
+    if (same) {
+      return;
+    }
+    this.decor = [...unlocked];
+    this.decorEnabled = enabled;
+    this.redrawDecor();
+  }
+
+  private redrawDecor(): void {
+    // Before create() (or if the texture is missing) there is nothing to draw on; create() redraws.
+    if (!this.mapDrawn || !this.textures.exists('decor')) {
+      return;
+    }
+    for (const sprite of this.decorSprites) {
+      sprite.destroy();
+    }
+    this.decorSprites = this.decorEnabled
+      ? visibleDecor(this.decor).map((slot) =>
+          this.add
+            .image(slot.tx * TILE_SIZE, slot.ty * TILE_SIZE, 'decor', slot.id)
+            .setOrigin(0, 0)
+            .setDepth(DECOR_DEPTH),
+        )
+      : [];
   }
 
   setAgents(agents: readonly AgentView[]): void {

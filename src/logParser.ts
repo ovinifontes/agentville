@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { Session, SubAgent } from './types';
+import { splitCompleteLines } from './completeLines';
 import { extractRenamedTitle, extractSessionName } from './nameExtractor';
 import { ProjectPathResolver } from './projectPathResolver';
 import { detectSubagents } from './subagentDetector';
@@ -92,7 +93,6 @@ export class LogParser {
 
     try {
       fs.readSync(fd, buffer, 0, bufferSize, lastReadOffset);
-      const newContent = buffer.toString('utf8');
 
       // Claude Code writes one line at a time; a chunk read mid-write can end partway through the
       // line currently being flushed (no trailing '\n' yet). That fragment must not be parsed now:
@@ -100,10 +100,9 @@ export class LogParser {
       // as something else — and since the offset would already sit past it, the real entry is lost
       // forever, because the next read starts after it, mid-JSON, and never resyncs. So hold the
       // fragment back and don't advance the offset past it, leaving it to be re-read whole once the
-      // writer finishes the line.
-      const endsWithNewline = newContent.endsWith('\n');
-      const lines = newContent.split('\n');
-      const incompleteTail = endsWithNewline ? '' : (lines.pop() ?? '');
+      // writer finishes the line. The split is made on the raw bytes (completeLines.ts), since
+      // the fragment can also end partway through a multi-byte character.
+      const { lines, bytes } = splitCompleteLines(buffer);
 
       const currentSubagents = new Map<string, SubAgent>();
       for (const sub of session.subagents) {
@@ -120,12 +119,22 @@ export class LogParser {
       enrichSubagentMetadata(session);
       session.lastInteractionTime = stats.mtimeMs;
 
-      // Byte length, not `.length` (UTF-16 code units): transcripts carry multibyte UTF-8 (accented
-      // text, emoji), so a char-counted retreat would land the next read mid-character instead of
-      // at the start of the held-back fragment.
-      return fileSize - Buffer.byteLength(incompleteTail, 'utf8');
+      // Bytes, not `.length` (UTF-16 code units), and counted before decoding: transcripts carry
+      // multibyte UTF-8 (accented text, emoji), so a char count — or the byte length of a decoded
+      // tail, where a torn character becomes a 3-byte U+FFFD — would land the next read
+      // mid-character, or before the file's start, instead of at the held-back fragment.
+      return lastReadOffset + bytes;
     } finally {
       fs.closeSync(fd);
+    }
+  }
+
+  private recordClientInfo(json: LogEntry, session: Session): void {
+    if (typeof json.entrypoint === 'string') {
+      session.entrypoint = json.entrypoint;
+    }
+    if (typeof json.version === 'string') {
+      session.claudeVersion = json.version;
     }
   }
 
@@ -136,6 +145,14 @@ export class LogParser {
     }
     try {
       const json = JSON.parse(line) as LogEntry;
+      // Claude Code quirk first observed in 2.1.300: `api-request-blob` entries replay the API
+      // request (thinking blocks, the launch's tool_result without its toolUseResult ACK marker).
+      // They are not turns: read as one they overwrite lastEntryType and mark backgrounded
+      // subagents stopped. Skipped before any detector or signal sees them. No-op for Antigravity,
+      // which never writes this entry type.
+      if (json.type === 'api-request-blob') {
+        return;
+      }
       // Subagent transcripts (<sessionId>/subagents/agent-*.jsonl, or same-dir sidechains) mark
       // every entry isSidechain:true. Flag the session so it's excluded from the standalone list —
       // otherwise the recursive **/*.jsonl watcher surfaces it as a phantom top-level session whose
@@ -144,12 +161,7 @@ export class LogParser {
         session.isSidechain = true;
       }
       this.trackTurnSignals(json, session);
-      if (typeof json.entrypoint === 'string') {
-        session.entrypoint = json.entrypoint;
-      }
-      if (typeof json.version === 'string') {
-        session.claudeVersion = json.version;
-      }
+      this.recordClientInfo(json, session);
       this.parseTimestamp(json, session, stats);
       this.projectPaths.detectGitBranch(json, session);
       this.projectPaths.detectWorktreeName(json, session);

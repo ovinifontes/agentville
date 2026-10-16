@@ -20,11 +20,15 @@ Package the extension for distribution as a `.vsix`.
    ```bash
    npm run lint && npx tsc --noEmit && npm run test
    ```
-3. **Check `.vscodeignore` excludes everything that must not ship.** Only `dist/`,
-   `package.json`, `readme.md`, and `LICENSE.txt` belong in the bundle. Any dev/harness
-   directory added since the last release (e.g. `.claude/`, `vault-obsidian/`,
-   `graphify-out/`, `.github/`, `docs/`, `scripts/`, and root files like `CLAUDE.md`,
-   `.mcp.json`, `.lsp.json`) **must** be listed in `.vscodeignore`, or vsce packs it.
+3. **Check `.vscodeignore` excludes everything that must not ship.** The bundle holds
+   `dist/extension.js`, `dist/webview.js` (the office webview with Phaser, ~1.2 MB
+   minified), `dist/office/*` (the CC0 office art and its licence), `resources/icon.png`,
+   `resources/office/*`, `resources/ASSETS.md`, `package.json`, `readme.md`, `LICENSE.txt`
+   and `NOTICE` — nothing else. Any dev/harness directory added since the last release
+   (e.g. `.claude/`, `.superpowers/`, `vault-obsidian/`, `graphify-out/`, `.github/`,
+   `docs/`, `scripts/`, and root files like `CLAUDE.md`, `.mcp.json`, `.lsp.json`)
+   **must** be listed in `.vscodeignore`, or vsce packs it. `resources/office-premium/`
+   (commercial art, a local dev override only) must never appear.
    ⚠️ `.claude/scripts/node_modules/` alone carries a ~243 MB SDK binary — a stale
    `.vscodeignore` produced a 77 MB / 3000-file bundle once.
 4. **Package:**
@@ -34,10 +38,11 @@ Package the extension for distribution as a `.vsix`.
    Removes any old `*.vsix`, bumps the patch version (`npm version patch --no-git-tag-version`),
    builds the minified bundle (`vscode:prepublish` → `node esbuild.js --minify`), and
    produces `agentville-<version>.vsix` at the repo root.
-5. **Guard the size** — read the vsce summary. A healthy bundle is a handful of files and
-   tens of KB. If it reports MBs or hundreds of files, a directory leaked: add it to
-   `.vscodeignore`, `git checkout -- package.json package-lock.json` to undo the bump,
-   and re-run step 4 (so the version only advances once).
+5. **Guard the size** — read the vsce summary. A healthy bundle is about 16 files and
+   roughly 0.5 MB (vsce's "webview.js is large" warning is expected: that is Phaser). If it
+   reports more than 2 MB, dozens of files, or any file outside the list in step 3, something
+   leaked: add it to `.vscodeignore`, `git checkout -- package.json package-lock.json` to undo
+   the bump, and re-run step 4 (so the version only advances once).
 6. **Report** the generated `.vsix` filename, its size/file-count, and the new version.
 7. **Remind to install + reload:**
 

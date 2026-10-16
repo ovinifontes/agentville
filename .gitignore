@@ -38,6 +38,13 @@ vault-obsidian/
 # aia-harness
 .claude/.aia-harness-pending/
 
-# Fixture pair written by src/test/lintRules.test.ts to prove import-x/no-cycle
-# still fires; removed in afterAll, ignored here so a crashed run cannot commit one.
+# Probe files written by src/test/lintRules.test.ts to prove its rules still fire (the
+# import-x/no-cycle pair in src/, the simulation probe in src/webview/simulation/); removed
+# in afterAll, ignored here so a crashed run cannot commit one.
 src/zzLintProbe*.ts
+src/webview/simulation/zzLintProbe*.ts
+
+# Commercial office tileset — licensed per developer, never redistributed.
+# Optional local override: when present, dev (non-minified) builds copy it over the
+# baseline in dist/office/; release builds never do (esbuild.js).
+resources/office-premium/

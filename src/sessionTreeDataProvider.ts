@@ -27,6 +27,10 @@ export class SessionTreeDataProvider implements vscode.TreeDataProvider<TreeItem
   >();
   readonly onDidChangeTreeData: vscode.Event<TreeItemType | undefined | null | void> = this._onDidChangeTreeData.event;
 
+  private readonly _onDidChangeSessions = new vscode.EventEmitter<void>();
+  /** Fires with every tree refresh; the office subscribes to it. */
+  readonly onDidChangeSessions = this._onDidChangeSessions.event;
+
   private logParser = new LogParser();
   private sessions = new Map<string, Session>();
   // Background-agent sessions nested under their launcher, keyed by the human session id.
@@ -61,6 +65,7 @@ export class SessionTreeDataProvider implements vscode.TreeDataProvider<TreeItem
     this.monitoringEnabled = true;
     this.loading = true;
     this._onDidChangeTreeData.fire();
+    this._onDidChangeSessions.fire();
 
     try {
       await this.loadSessions();
@@ -74,6 +79,7 @@ export class SessionTreeDataProvider implements vscode.TreeDataProvider<TreeItem
     this.setupFileWatchers();
     this.startAutoRefresh();
     this._onDidChangeTreeData.fire();
+    this._onDidChangeSessions.fire();
   }
 
   /** Turn monitoring off: dispose watchers, stop the timer, drop cached sessions. */
@@ -86,11 +92,13 @@ export class SessionTreeDataProvider implements vscode.TreeDataProvider<TreeItem
     this.sessions.clear();
     logDebug('SessionTreeDataProvider: monitoring deactivated');
     this._onDidChangeTreeData.fire();
+    this._onDidChangeSessions.fire();
   }
 
   public dispose(): void {
     this.stopAutoRefresh();
     this.disposeWatchers();
+    this._onDidChangeSessions.dispose();
   }
 
   private startAutoRefresh(): void {
@@ -115,8 +123,14 @@ export class SessionTreeDataProvider implements vscode.TreeDataProvider<TreeItem
     logDebug('SessionTreeDataProvider: refresh() requested');
     void this.loadSessions().then(() => {
       this._onDidChangeTreeData.fire();
+      this._onDidChangeSessions.fire();
       logDebug('SessionTreeDataProvider: refresh() finished, onDidChangeTreeData fired');
     });
+  }
+
+  /** Sessions exactly as the tree renders them (deduped, nested, filtered). */
+  public getSessions(): Session[] {
+    return this.getVisibleSessions();
   }
 
   public getTreeItem(element: TreeItemType): vscode.TreeItem {
@@ -275,6 +289,7 @@ export class SessionTreeDataProvider implements vscode.TreeDataProvider<TreeItem
       // Check active status after change
       void this.updateActiveStatuses().then(() => {
         this._onDidChangeTreeData.fire();
+        this._onDidChangeSessions.fire();
         logDebug(`SessionTreeDataProvider: handleFileChange() completed for ${session.id}`);
       });
     } catch (err) {

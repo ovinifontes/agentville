@@ -15,13 +15,18 @@ const SRC = path.join(REPO_ROOT, 'src');
 
 const eslint = new ESLint({ cwd: REPO_ROOT });
 
+// The first typed lint pays the project service's cold start (the whole program, Phaser's
+// large .d.ts included), which coverage instrumentation slows further: well past vitest's
+// 5 s default. Scoped to these suites so no other test's timeout changes.
+const PROBE_OPTIONS = { timeout: 30_000 };
+
 /** Rule ids reported for `code` linted as if it were the file at `filePath`. */
 async function ruleIdsFor(code: string, filePath: string): Promise<string[]> {
   const [result] = await eslint.lintText(code, { filePath, warnIgnored: false });
   return result.messages.map((message) => message.ruleId).filter((id): id is string => id !== null);
 }
 
-describe('architectural lint rules', () => {
+describe('architectural lint rules', PROBE_OPTIONS, () => {
   it('stops the parsing core from importing the vscode package', async () => {
     const ruleIds = await ruleIdsFor(
       `import * as vscode from 'vscode';\nexport const probe: unknown = vscode;\n`,
@@ -74,7 +79,7 @@ describe('architectural lint rules', () => {
   });
 });
 
-describe('webview simulation lint rules', () => {
+describe('webview simulation lint rules', PROBE_OPTIONS, () => {
   // `src/webview/simulation/` doesn't exist yet and the typed config only lints files the
   // project service can see, so the probe file is real on disk for the duration of the suite.
   const simDir = path.join(SRC, 'webview', 'simulation');
@@ -105,7 +110,7 @@ describe('webview simulation lint rules', () => {
   });
 });
 
-describe('import cycle detection', () => {
+describe('import cycle detection', PROBE_OPTIONS, () => {
   // A cycle only exists between files that are really on disk — the resolver reads the
   // second half of the pair from the filesystem, so this pair can't be virtual.
   const cycleFiles = [path.join(SRC, 'zzLintProbeA.ts'), path.join(SRC, 'zzLintProbeB.ts')];

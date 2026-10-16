@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { LogParser } from '../logParser';
 
@@ -102,5 +104,85 @@ describe('LogParser against real Claude Code logs', () => {
 
     expect(session.subagents.length).toBe(1);
     expect(session.subagents[0].status).toBe('stopped');
+  });
+
+  describe('SendMessage resume addressed by the sidecar-only agentId', () => {
+    // Redacted reconstruction (synthetic ids and text) of a real orchestrating session: an Agent
+    // launched with no `name`, backgrounded, completed via <task-notification>, then resumed with
+    // SendMessage whose `to` is the raw agentId — an id the parser only learns from the
+    // `agent-<id>.meta.json` sidecar under `<sessionId>/subagents/`.
+    const fixtureName = 'sendmessage-resume-by-agent-id';
+    const agentId = 'a1b2c3d4e5f607182';
+    const resumeId = 'toolu_01SampleResume000000001';
+    const fixtureLines = fs
+      .readFileSync(path.join(FIXTURES_DIR, `${fixtureName}.jsonl`), 'utf8')
+      .split('\n')
+      .filter((line) => line.trim());
+    const sidecar = path.join(FIXTURES_DIR, fixtureName, 'subagents', `agent-${agentId}.meta.json`);
+    let tempDir: string | undefined;
+
+    afterEach(() => {
+      if (tempDir) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+        tempDir = undefined;
+      }
+    });
+
+    const toText = (lines: string[]): string => lines.map((line) => line + '\n').join('');
+
+    /** Same layout as the fixture, in a temp dir the test can append to. */
+    function copyFixture(lines: string[]): string {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sendmessage-resume-'));
+      const subagentsDir = path.join(tempDir, fixtureName, 'subagents');
+      fs.mkdirSync(subagentsDir, { recursive: true });
+      fs.copyFileSync(sidecar, path.join(subagentsDir, path.basename(sidecar)));
+      const filePath = path.join(tempDir, `${fixtureName}.jsonl`);
+      fs.writeFileSync(filePath, toText(lines));
+      return filePath;
+    }
+
+    it('marks the resumed subagent working on a cold full parse (window reload)', () => {
+      const session = new LogParser().parse(path.join(FIXTURES_DIR, `${fixtureName}.jsonl`), 'claude-code');
+
+      expect(session.subagents).toHaveLength(1);
+      const [resumed] = session.subagents;
+      expect(resumed.status).toBe('working');
+      expect(resumed.id).toBe(resumeId);
+      expect(resumed.launchId).toBe('toolu_01SampleLaunch000000001');
+      expect(resumed.agentId).toBe(agentId);
+    });
+
+    it('agrees with an incremental parse that already held the agentId', () => {
+      const filePath = copyFixture(fixtureLines.slice(0, 5));
+      const parser = new LogParser();
+      expect(parser.parse(filePath, 'claude-code').subagents[0].status).toBe('stopped');
+
+      fs.appendFileSync(filePath, toText(fixtureLines.slice(5)));
+      const session = parser.parse(filePath, 'claude-code');
+
+      expect(session.subagents).toHaveLength(1);
+      expect(session.subagents[0].status).toBe('working');
+      expect(session.subagents[0].id).toBe(resumeId);
+    });
+
+    it('keeps the resumed subagent stopped on a cold parse once the resumed run also completed', () => {
+      // The resumed run's own <task-notification> carries the SendMessage's tool_use id (observed
+      // on the real session) — so the resume must be applied in line order, before that
+      // notification is read, or a cold parse would wrongly revive a finished subagent.
+      const completion = {
+        type: 'queue-operation',
+        operation: 'enqueue',
+        timestamp: '2026-10-16T00:04:27.703Z',
+        sessionId: fixtureName,
+        content: `<task-notification>\n<task-id>${agentId}</task-id>\n<tool-use-id>${resumeId}</tool-use-id>\n<status>completed</status>\n</task-notification>`,
+      };
+      const filePath = copyFixture([...fixtureLines, JSON.stringify(completion)]);
+
+      const session = new LogParser().parse(filePath, 'claude-code');
+
+      expect(session.subagents).toHaveLength(1);
+      expect(session.subagents[0].status).toBe('stopped');
+      expect(session.subagents[0].id).toBe(resumeId);
+    });
   });
 });

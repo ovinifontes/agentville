@@ -49,6 +49,7 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
   switch (message.type) {
     case 'snapshot':
       agents = message.agents;
+      feed.syncPresence(agents.map((a) => a.id));
       scene.setActive(true);
       scene.setAgents(message.agents);
       overflow.textContent = message.truncated > 0 ? `+${message.truncated} waiting` : '';

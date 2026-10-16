@@ -70,3 +70,16 @@ describe('RecentEntryStore', () => {
     expect(original.text).toHaveLength(MAX_ENTRY_CHARS + 10);
   });
 });
+
+describe('RecentEntryStore.retain with the open feed id', () => {
+  it('keeps the buffer of an agent that left the snapshot when its id is kept', () => {
+    const store = new RecentEntryStore();
+    store.push('gone', entry('last words'));
+    store.push('other', entry('x'));
+    store.retain(['gone']);
+    expect(store.get('gone')).toHaveLength(1);
+    expect(store.get('other')).toHaveLength(0);
+    store.retain([]);
+    expect(store.get('gone')).toHaveLength(0);
+  });
+});

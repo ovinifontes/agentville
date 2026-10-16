@@ -191,9 +191,14 @@ export class OfficePanel {
       const sessions = this.provider.getSessions();
       this.refreshActions(sessions);
       const { agents, truncated } = buildSnapshot(sessions, this.actions);
-      this.entries.retain(agents.map((a) => a.id));
+      const ids = agents.map((a) => a.id);
+      // The open feed's agent keeps its last entries after it leaves, until the panel closes.
+      this.entries.retain(this.openFeedAgentId ? [...ids, this.openFeedAgentId] : ids);
       this.post({ type: 'snapshot', agents, truncated });
-      this.pushFeed();
+      // A departed agent has nothing new to show; the webview keeps the last feed it got.
+      if (this.openFeedAgentId && ids.includes(this.openFeedAgentId)) {
+        this.pushFeed();
+      }
     } catch (error) {
       logDebug(`OfficePanel.push failed: ${String(error)}`);
     }

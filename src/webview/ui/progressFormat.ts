@@ -4,10 +4,10 @@ import { xpForLevel } from '../../progressRules';
 
 const MAX_NAME_CHARS = 18;
 
-/** `name · Lv N`: the name is cut to 18 chars, the level suffix always survives. */
+/** `name · Lv N` (N >= 2; plain name at level 1): the name is cut to 18 chars, the level suffix always survives. */
 export function tagText(name: string, level: number | undefined): string {
   const shown = name.length > MAX_NAME_CHARS ? `${name.slice(0, MAX_NAME_CHARS)}…` : name;
-  return level === undefined ? shown : `${shown} · Lv ${level}`;
+  return level === undefined || level < 2 ? shown : `${shown} · Lv ${level}`;
 }
 
 /** "45s", "12m", "2h 05m": coarse on purpose, working time only needs a feel. */

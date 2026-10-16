@@ -20,6 +20,7 @@ export class ToastLayer {
   }
 
   show(achievements: readonly AchievementView[], toastIds: readonly string[]): void {
+    for (const id of this.seen) if (!toastIds.includes(id)) this.seen.delete(id);
     const fresh = toastIds.filter((id) => !this.seen.has(id));
     for (const id of fresh) {
       this.seen.add(id);

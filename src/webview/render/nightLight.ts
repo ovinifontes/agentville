@@ -50,6 +50,7 @@ export class NightLight {
     this.lastMinute = minute;
     const { color, alpha, screensGlow } = lightingAt(minute);
     this.tint.setFillStyle(color, alpha);
-    this.glow.setAlpha(screensGlow * GLOW_MAX_ALPHA);
+    this.tint.setVisible(alpha > 0);
+    this.glow.setVisible(screensGlow > 0).setAlpha(screensGlow * GLOW_MAX_ALPHA);
   }
 }

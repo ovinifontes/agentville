@@ -5,12 +5,17 @@
 
 import type { RenderedPosition } from '../render/officeScene';
 import { pruneNodes } from './pruneNodes';
+import { layoutBubbles, stackOrder, type BubbleBox } from './bubbleLayout';
 
 const MAX_BUBBLE_CHARS = 40;
 const GAP_PX = 4;
 
 export class BubbleLayer {
   private readonly nodes = new Map<string, HTMLButtonElement>();
+  // Measured once per text change; the per-frame layout only reads these numbers.
+  private readonly sizes = new Map<string, { width: number; height: number }>();
+  // Last paint order applied (stackOrder), so nodes are moved only when it changes.
+  private stackKey = '';
 
   constructor(
     private readonly root: HTMLElement,
@@ -18,27 +23,53 @@ export class BubbleLayer {
   ) {}
 
   render(positions: readonly RenderedPosition[]): void {
-    pruneNodes(this.nodes, new Set(positions.filter((p) => p.action).map((p) => p.id)));
-    for (const position of positions) {
-      if (!position.action) {
-        continue;
+    const working = positions.filter((p) => p.action);
+    pruneNodes(this.nodes, new Set(working.map((p) => p.id)));
+    for (const id of this.sizes.keys()) {
+      if (!this.nodes.has(id)) {
+        this.sizes.delete(id);
       }
-      let node = this.nodes.get(position.id);
-      if (!node) {
-        node = document.createElement('button');
-        node.className = 'bubble';
-        node.addEventListener('click', () => {
-          this.onClick(position.id);
-        });
-        this.root.appendChild(node);
-        this.nodes.set(position.id, node);
-      }
-      const text =
-        position.action.length > MAX_BUBBLE_CHARS ? `${position.action.slice(0, MAX_BUBBLE_CHARS)}…` : position.action;
-      if (node.textContent !== text) {
-        node.textContent = text;
-      }
-      node.style.transform = `translate(${position.screenX}px, ${position.screenY - GAP_PX}px) translate(-50%, -100%)`;
     }
+    const boxes: BubbleBox[] = [];
+    for (const position of working) {
+      const size = this.ensureNode(position.id, position.action ?? '');
+      boxes.push({ id: position.id, x: position.screenX, bottom: position.screenY - GAP_PX, ...size });
+    }
+    const bottoms = layoutBubbles(boxes);
+    for (const box of boxes) {
+      const node = this.nodes.get(box.id);
+      if (node) {
+        node.style.transform = `translate(${box.x}px, ${bottoms.get(box.id) ?? box.bottom}px) translate(-50%, -100%)`;
+      }
+    }
+    // Bubbles share one z-index, so DOM order decides which overlapping one is on top.
+    const order = stackOrder(boxes);
+    const key = order.join(' ');
+    if (key !== this.stackKey) {
+      this.stackKey = key;
+      this.root.append(...order.flatMap((id) => this.nodes.get(id) ?? []));
+    }
+  }
+
+  /** Creates the node if needed and re-measures it only when its text changed. */
+  private ensureNode(id: string, action: string): { width: number; height: number } {
+    let node = this.nodes.get(id);
+    if (!node) {
+      node = document.createElement('button');
+      node.className = 'bubble';
+      node.addEventListener('click', () => {
+        this.onClick(id);
+      });
+      this.root.appendChild(node);
+      this.nodes.set(id, node);
+    }
+    const text = action.length > MAX_BUBBLE_CHARS ? `${action.slice(0, MAX_BUBBLE_CHARS)}…` : action;
+    let size = this.sizes.get(id);
+    if (node.textContent !== text || !size) {
+      node.textContent = text;
+      size = { width: node.offsetWidth, height: node.offsetHeight };
+      this.sizes.set(id, size);
+    }
+    return size;
   }
 }

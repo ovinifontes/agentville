@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { detectSubagents } from '../subagentDetector';
 import { SubAgent } from '../types';
 import { LogEntry } from '../logParser';
@@ -137,6 +137,21 @@ describe('detectSubagents — SendMessage resume', () => {
     const resumed = subagents.get('toolu_resume_1');
     expect(resumed?.status).toBe('working');
     expect(resumed?.agentId).toBe('ad2d7960e4bd708a3a');
+  });
+
+  it('resolves agentIds only on a miss, and stays a no-op when the target is still unknown', () => {
+    // logParser passes a resolver that reads the sidecars (a cold parse hasn't filled agentId yet).
+    const subagents = new Map<string, SubAgent>();
+    detectSubagents(launchTurn('toolu_launch_1', 'regression-logic'), subagents);
+    const resolveAgentIds = vi.fn();
+
+    detectSubagents(sendMessageTurn('toolu_resume_1', 'regression-logic'), subagents, resolveAgentIds);
+    expect(resolveAgentIds).not.toHaveBeenCalled();
+
+    detectSubagents(sendMessageTurn('toolu_resume_2', 'some-other-agent'), subagents, resolveAgentIds);
+    expect(resolveAgentIds).toHaveBeenCalledTimes(1);
+    expect(subagents.size).toBe(1);
+    expect(subagents.has('toolu_resume_2')).toBe(false);
   });
 
   it('keeps launchId pointing at the original launch across a second resume', () => {

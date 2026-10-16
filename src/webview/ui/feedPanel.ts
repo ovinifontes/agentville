@@ -9,6 +9,7 @@ export class FeedPanel {
   private readonly list: HTMLElement;
   private readonly title: HTMLElement;
   private agentId: string | undefined;
+  private name = '';
 
   constructor(
     root: HTMLElement,
@@ -32,9 +33,19 @@ export class FeedPanel {
 
   open(agentId: string, name: string): void {
     this.agentId = agentId;
+    this.name = name;
     this.title.textContent = name;
     this.list.textContent = '';
     this.element.classList.remove('hidden');
+  }
+
+  /** Mark the open agent as finished when it is absent from the latest snapshot. */
+  syncPresence(presentIds: readonly string[]): void {
+    if (this.agentId === undefined) {
+      return;
+    }
+    const finished = !presentIds.includes(this.agentId);
+    this.title.textContent = finished ? `${this.name} · finished` : this.name;
   }
 
   close(): void {

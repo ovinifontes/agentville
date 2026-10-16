@@ -83,6 +83,16 @@
         "command": "agentville.disable",
         "title": "Disable Agent Monitoring",
         "icon": "$(eye)"
+      },
+      {
+        "command": "agentville.showAllProjects",
+        "title": "AgentVille: Show All Projects",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "agentville.showThisProjectOnly",
+        "title": "AgentVille: Show This Project Only",
+        "icon": "$(folder)"
       }
     ],
     "menus": {
@@ -106,6 +116,16 @@
           "command": "agentville.openOffice",
           "when": "view == agentville.world && config.agentville.enabled",
           "group": "navigation@2"
+        },
+        {
+          "command": "agentville.showAllProjects",
+          "when": "view == agentville.world && config.agentville.enabled && workspaceFolderCount > 0 && !config.agentville.showAllProjects",
+          "group": "navigation@3"
+        },
+        {
+          "command": "agentville.showThisProjectOnly",
+          "when": "view == agentville.world && config.agentville.enabled && workspaceFolderCount > 0 && config.agentville.showAllProjects",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
@@ -129,6 +149,12 @@
           "default": true,
           "scope": "application",
           "description": "Monitor Claude Code and Antigravity sessions. When disabled, the extension stops reading logs in every window/instance. Monitoring only resumes when you re-enable it (button at the top of the panel) or change this setting."
+        },
+        "agentville.showAllProjects": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "Show Claude Code sessions from every project, not only the folders open in this window. Sessions that ended more than an hour ago are still hidden."
         }
       }
     }

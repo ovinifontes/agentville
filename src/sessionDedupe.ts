@@ -62,7 +62,8 @@ export function applyNestedAgentLiveness(sessions: Session[]): void {
  * same prompt `task` already shows. Using it for `name` too just repeats the task text as both
  * the row's bold label and its description, which reads as a rendering bug rather than two
  * pieces of information. 'Agent' matches subagentDetector's own fallback for the same "no real
- * name available" case, so both subagent flavors degrade to the same generic label. */
+ * name available" case, so both subagent flavors degrade to the same generic label. The office,
+ * which has no description line, names it from the title instead (officeSnapshot.ts's nameOf). */
 export function sessionAsSubagent(agent: Session): SubAgent {
   return {
     id: agent.id,
@@ -70,6 +71,7 @@ export function sessionAsSubagent(agent: Session): SubAgent {
     task: agent.sessionTitle || agent.id,
     status: agent.status,
     model: agent.model,
+    transcriptPath: agent.logFilePath,
   };
 }
 

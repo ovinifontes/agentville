@@ -16,7 +16,9 @@ sessions, subagents, models and live status — in one place inside VS Code.
 - **Active detection** — a session is marked active on a recent write, a reply it still owes, a long _thinking_ turn, or while any of its subagents — including a background agent it launched that runs in its own log file — are still working. `lsof` is also checked on macOS/Linux as a secondary signal (it rarely finds anything, since the log file's descriptor isn't held open between appends), and is skipped entirely on Windows.
 - **Startup delay** — waits ~10s on activation, showing a progress bar and loading state, so it doesn't compete with Claude Code for the log files while it boots.
 - **Global on/off toggle** — an eye icon in the view title. Persisted as an application-scoped setting, so disabling it stops monitoring across **every** window/instance.
-- **The office** — run **AgentVille: Open Office** (or click the game icon in the view title) to open a furnished pixel-art office in an editor tab. Every running session and subagent is a character: they enter by the door as agents start, wander the floor and carry a name tag. Finished subagents walk out by the door; sessions stay on the floor, dimmed and without a bubble, between turns. Everything leaves when it drops off the tree's list (last hour) or past the 24 cap. A live speech bubble shows what each working agent is doing right now (`Editing logParser.ts`, `Running npm test`); clicking it opens a side panel with that agent's recent activity. Past 24 characters the rest collapse into a `+N waiting` chip. Art is CC0 (see [resources/ASSETS.md](resources/ASSETS.md)). Limits: wandering is decorative (characters walk around furniture along tile paths, but do not avoid each other), Antigravity agents get no bubble because their logs carry no Claude-style tool calls, background agents that the tree nests under the session that launched them are not drawn in the office yet, and the office shows the same sessions as the tree (current workspace, last hour).
+- **The office** — run **AgentVille: Open Office** (or click the game icon in the view title) to open a furnished pixel-art office in an editor tab. Every running session and subagent is a character: they enter by the door (marked by an _Entrance_ sign) as agents start and carry a name tag. Finished subagents walk out by the door; sessions stay on the floor, dimmed and without a bubble, between turns. Everything leaves when it drops off the tree's list (last hour) or past the 24 cap. Background agents the tree nests under the session that launched them are drawn too, named after their session title.
+- **Situated behaviour** — characters go where their work is and face their furniture: a desk when editing, running a command, planning, thinking or with no action yet (also Antigravity agents); the bookshelf when reading, searching or researching; the meeting table when delegating; and the lounge (coffee counter or sofa) once stopped. Chairs and the sofa are seats the character sits on; walking routes keep to the floor and only step onto a seat to sit down or off it to leave. A character stays at its spot for at least 5 s before moving to a different kind of place, and when every matching spot is taken it wanders and tries again. A live speech bubble shows what each working agent is doing right now (`Editing logParser.ts`, `Running npm test`); clicking it opens a side panel with that agent's recent activity, which stays after the agent finishes (marked `· finished`). Past 24 characters the rest collapse into a `+N waiting` chip. The scene is capped at 30 fps to keep idle CPU low. Art is CC0 (see [resources/ASSETS.md](resources/ASSETS.md)). Limits: Antigravity agents get no bubble because their logs carry no Claude-style tool calls, and characters do not avoid each other, so two walkers may pass through each other.
+- **Show all projects** — by default the tree and the office show the same sessions: those from the last hour, with Claude Code sessions limited to the current workspace (Antigravity sessions are always shown across projects). Click the globe icon in the view title (or set `agentville.showAllProjects`) to show Claude Code sessions from every project; the folder icon switches back.
 
 ## Roadmap
 
@@ -26,9 +28,6 @@ sessions, subagents, models and live status — in one place inside VS Code.
 
 The name is the plan: make the **living 2D pixel office** richer.
 
-- **Situated behaviour** — characters walk to the furniture that matches their work:
-  the bookshelf when reading a file, a desk when editing, the printer when running a
-  command, the coffee machine when idle.
 - **Progression** — XP and levels per agent type, achievements, a ranking of who worked
   the most, day/night cycle, and unlockable office decoration.
 
@@ -84,16 +83,17 @@ To uninstall: `antigravity-ide --uninstall-extension soumatheusgomes.agentville`
 
 ## Configuration
 
-| Setting              | Default | Scope       | Description                                                                                                               |
-| -------------------- | ------- | ----------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `agentville.enabled` | `true`  | application | Monitor sessions. Disabling stops all log reading in every window; re-enable via the eye icon or by editing this setting. |
+| Setting                      | Default | Scope       | Description                                                                                                                                    |
+| ---------------------------- | ------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agentville.enabled`         | `true`  | application | Monitor sessions. Disabling stops all log reading in every window; re-enable via the eye icon or by editing this setting.                      |
+| `agentville.showAllProjects` | `false` | window      | Show Claude Code sessions from every project, not only the folders open in this window. Sessions that ended more than an hour ago stay hidden. |
 
 ## Usage
 
 - Open the **AgentVille** view from the activity bar.
 - Expand a brand → a session → _Working_ / _Completed_ to see subagents.
 - **Open Log File** / **Open Project Folder** are available on each session row (inline icons).
-- Toggle monitoring on/off with the eye icon in the view title.
+- Toggle monitoring on/off with the eye icon in the view title; the globe/folder icon toggles all projects vs. this workspace.
 
 Want to build or modify the extension instead? See
 [docs/DEVELOPMENT.md](https://github.com/soumatheusgomes/agentville/blob/main/docs/DEVELOPMENT.md).

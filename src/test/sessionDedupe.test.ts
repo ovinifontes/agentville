@@ -353,6 +353,11 @@ describe('sessionAsSubagent', () => {
     expect(sub.name).not.toBe(sub.task);
   });
 
+  it('carries the agent own transcript path so the office can read it', () => {
+    const sub = sessionAsSubagent(makeSession({ id: 'agent', logFilePath: '/logs/p/agent.jsonl' }));
+    expect(sub.transcriptPath).toBe('/logs/p/agent.jsonl');
+  });
+
   it('falls back to the session id for task when no title was captured yet', () => {
     const agent = makeSession({ id: 'agent-untitled', sessionTitle: '' });
     const sub = sessionAsSubagent(agent);

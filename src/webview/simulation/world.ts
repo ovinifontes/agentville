@@ -15,6 +15,9 @@ export const WORLD_HEIGHT = MAP_TILES_Y * TILE_SIZE;
 
 // # wall   . floor   , rug   D desk   C chair   T meeting table
 // P plant  S sofa    K coffee counter  R printer/shelf   _ door
+// Chairs and the sofa are seats: walkable, so a character can sit (stand on them, facing the
+// furniture), but a route only starts or ends on one (pathfinding.ts), so walkers use the floor
+// rather than the chair rows. Every other piece of furniture is solid.
 const OPEN_ROW = '#......................................#';
 
 export const OFFICE_MAP: readonly string[] = [
@@ -44,7 +47,8 @@ export const OFFICE_MAP: readonly string[] = [
   '########################################',
 ];
 
-const WALKABLE = new Set(['.', ',', '_']);
+const SEATS = new Set(['C', 'S']);
+const WALKABLE = new Set(['.', ',', '_', ...SEATS]);
 
 export type TileKind = string;
 
@@ -58,6 +62,11 @@ export function isWalkable(x: number, y: number): boolean {
     return false;
   }
   return WALKABLE.has(tileAt(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE)));
+}
+
+/** World-pixel coordinates → on a chair or the sofa? */
+export function isSeat(x: number, y: number): boolean {
+  return SEATS.has(tileAt(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE)));
 }
 
 /** Every standable tile, as world-pixel centres. Computed once — the map never changes. */

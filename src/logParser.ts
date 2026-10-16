@@ -23,6 +23,7 @@ interface LogLineContext {
   line: string;
   session: Session;
   currentSubagents: Map<string, SubAgent>;
+  resolveAgentIds: () => void;
   stats: fs.Stats;
 }
 
@@ -109,13 +110,27 @@ export class LogParser {
         currentSubagents.set(sub.id, sub);
       }
 
+      // A SendMessage resume can address a subagent by the agentId only its sidecar holds, and on a
+      // cold parse the post-loop enrichment below hasn't run yet (subagentDetector.ts's
+      // detectSendMessageResume). The detector calls this only when a SendMessage target matches
+      // nothing, so the sidecar read stays off the common path. Antigravity never writes
+      // SendMessage, so it never fires there.
+      // Known gap (pre-existing): a subagent launched while the session was in a git worktree has
+      // its sidecar under the worktree's projects dir. If the session has returned to the base
+      // project by the SendMessage's line, a cold parse's resolve looks in the base dir only
+      // (candidateMetadataDirs follows the current projectPath) and misses it, while an incremental
+      // parse already enriched it back when projectPath was the worktree — so the two can differ.
+      const resolveAgentIds = (): void => {
+        enrichSubagentMetadata({ ...session, subagents: Array.from(currentSubagents.values()) });
+      };
       for (const line of lines) {
-        this.parseLogLine({ line, session, currentSubagents, stats });
+        this.parseLogLine({ line, session, currentSubagents, resolveAgentIds, stats });
       }
 
       session.subagents = Array.from(currentSubagents.values());
-      // Runs once per parseNewLines() call (i.e. only when this file actually grew), and only
-      // reads a sidecar for subagents still missing a name/model — never per render.
+      // Runs once per parseNewLines() call (i.e. only when this file actually grew), besides the
+      // mid-loop resolveAgentIds above, and only reads a sidecar for subagents still missing a
+      // name, model or agentId (subagentMetadata.ts's needsSidecarData) — never per render.
       enrichSubagentMetadata(session);
       session.lastInteractionTime = stats.mtimeMs;
 
@@ -139,7 +154,7 @@ export class LogParser {
   }
 
   private parseLogLine(ctx: LogLineContext): void {
-    const { line, session, currentSubagents, stats } = ctx;
+    const { line, session, currentSubagents, resolveAgentIds, stats } = ctx;
     if (!line.trim()) {
       return;
     }
@@ -170,7 +185,7 @@ export class LogParser {
 
       this.detectSessionTitle(json, session);
 
-      detectSubagents(json, currentSubagents);
+      detectSubagents(json, currentSubagents, resolveAgentIds);
     } catch {
       // Ignore JSON parse errors
     }

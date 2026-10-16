@@ -11,7 +11,7 @@ export interface BubbleBox {
 }
 
 const MARGIN_PX = 2;
-const MAX_LIFTS = 16;
+export const MAX_LIFTS = 16;
 
 function overlaps(a: { x: number; bottom: number; width: number; height: number }, b: typeof a): boolean {
   return (
@@ -23,8 +23,9 @@ function overlaps(a: { x: number; bottom: number; width: number; height: number 
 
 /**
  * Bottom-most anchors are placed first at their default spot; a bubble that would overlap an
- * already placed one is lifted just above the highest one it hits, until free. x never moves,
- * so a lifted bubble stays above its own character. Returns bottom edge by id.
+ * already placed one is lifted just above the highest one it hits, until free — or until the
+ * next lift would cross the top of the overlay root (y 0), where it stays and overlaps. x never
+ * moves, so a lifted bubble stays above its own character. Returns bottom edge by id.
  */
 export function layoutBubbles(boxes: readonly BubbleBox[]): Map<string, number> {
   const placed: BubbleBox[] = [];
@@ -35,8 +36,13 @@ export function layoutBubbles(boxes: readonly BubbleBox[]): Map<string, number> 
       if (hits.length === 0) {
         break;
       }
-      const top = Math.min(...hits.map((h) => h.bottom - h.height));
-      current = { ...current, bottom: top - MARGIN_PX };
+      const next = Math.min(...hits.map((h) => h.bottom - h.height)) - MARGIN_PX;
+      // Never lift past the top of the overlay root: a clipped bubble cannot be clicked, and it
+      // is the only way to open that agent's feed. An overlapping but visible one is better.
+      if (next - current.height < 0) {
+        break;
+      }
+      current = { ...current, bottom: next };
     }
     placed.push(current);
   }

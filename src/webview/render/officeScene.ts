@@ -319,8 +319,11 @@ export function createOffice(parent: HTMLElement, assetsBaseUri: string): Office
     height: WORLD_HEIGHT,
     pixelArt: true,
     backgroundColor: '#1e1e1e',
-    // The office is slow-paced; half the default 60 fps halves the idle CPU cost.
-    fps: { limit: 30 },
+    // The office is slow-paced; half the default 60 fps halves the idle CPU cost. 31, not 30:
+    // Phaser 3.90's stepLimitFPS fires once the summed (smoothed) frame deltas reach 1000/limit ms
+    // and then drops the leftover, so at 30 two 60 Hz frames (~33.3 ms) land just under 33.33 ms
+    // as often as over, and the loop judders between 20 and 30 fps. 32.26 ms clears every 2nd frame.
+    fps: { limit: 31 },
     // No FIT: the world is scaled by our own zoom (see fit()).
     scale: { mode: Phaser.Scale.NONE, zoom: 1, autoCenter: Phaser.Scale.CENTER_BOTH },
     scene,

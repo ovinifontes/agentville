@@ -155,9 +155,12 @@ function accrue(state: ProgressState, flat: Flat[], now: number): ProgressState 
   return { ...state, types, dayMs: state.dayMs + credit * earning.length };
 }
 
-/** First tick (fresh install or reset): history is only recorded as counted, never rewarded. */
+/**
+ * First tick (fresh install, reset, or progression re-enabled): history is only recorded as
+ * counted, never rewarded. Merges with ids already counted, so nothing is lost on re-enable.
+ */
 function seedRuns(state: ProgressState, stopped: Flat[]): ProgressState {
-  const ids = [...new Set(stopped.map((f) => f.id))];
+  const ids = [...new Set([...state.countedIds, ...stopped.map((f) => f.id)])];
   return { ...state, countedIds: ids.slice(-MAX_COUNTED_IDS) };
 }
 
@@ -203,6 +206,11 @@ export function applyTick(state: ProgressState, sessions: readonly Session[], cl
     },
     unlocked,
   };
+}
+
+/** Progression off: forget the last tick, so the first tick after re-enabling seeds instead of crediting the gap. */
+export function pauseProgress(state: ProgressState): ProgressState {
+  return { ...state, lastTickAt: null, prevWorking: [] };
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {

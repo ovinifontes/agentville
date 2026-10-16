@@ -9,6 +9,7 @@ import {
   unlockedDecor,
   rankTypes,
   migrate,
+  pauseProgress,
   MAX_COUNTED_IDS,
   type ProgressState,
 } from '../progressRules';
@@ -163,6 +164,26 @@ describe('first tick seeding (R3)', () => {
     let st2 = warm();
     for (const [i, a] of states.entries()) st2 = applyTick(st2, [sess([a])], clock(T0 + (i + 1) * MIN)).state;
     expect(st2.totalRuns).toBe(1);
+  });
+});
+
+describe('pause and re-enable (progression setting)', () => {
+  const done = (id: string) => sub({ id, status: 'stopped' });
+  it('credits neither time nor runs from the disabled period, and keeps earlier counted ids', () => {
+    const working = sess([sub({ id: 'w' })], { id: 's2', status: 'working' });
+    const before = run([sess([done('a')]), working], [T0, T0 + MIN, T0 + 2 * MIN]);
+    const xp = officeXp(before);
+    const paused = pauseProgress(before);
+    expect(paused.lastTickAt).toBeNull();
+    // Re-enabled 30 minutes later: 'b' finished while disabled, 'w' kept working.
+    const resumed = applyTick(paused, [sess([done('a'), done('b')]), working], clock(T0 + 32 * MIN)).state;
+    expect(officeXp(resumed)).toBe(xp);
+    expect(resumed.totalRuns).toBe(before.totalRuns);
+    expect(resumed.countedIds).toEqual(['a', 'b']);
+    // The next tick earns again from then on.
+    const next = applyTick(resumed, [sess([done('a'), done('b'), done('c')]), working], clock(T0 + 33 * MIN)).state;
+    expect(next.totalRuns).toBe(before.totalRuns + 1);
+    expect(officeXp(next)).toBe(xp + 2 + 10); // a minute each for session and subagent, plus run 'c'
   });
 });
 

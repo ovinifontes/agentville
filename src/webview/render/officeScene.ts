@@ -195,6 +195,11 @@ export class OfficeScene extends Phaser.Scene {
     return this.scale.zoom;
   }
 
+  /** Canvas top-left relative to `parent`, as of the last resize. */
+  get canvasOrigin(): { left: number; top: number } {
+    return { left: this.canvasLeft, top: this.canvasTop };
+  }
+
   setAgents(agents: readonly AgentView[]): void {
     this.pending = [...agents];
   }
@@ -345,6 +350,8 @@ export function createOffice(parent: HTMLElement, assetsBaseUri: string): Office
     height: WORLD_HEIGHT,
     pixelArt: true,
     backgroundColor: '#1e1e1e',
+    // The office is slow-paced; half the default 60 fps halves the idle CPU cost.
+    fps: { limit: 30 },
     // No FIT: the world is scaled by our own zoom (see fit()).
     scale: { mode: Phaser.Scale.NONE, zoom: 1, autoCenter: Phaser.Scale.CENTER_BOTH },
     scene,

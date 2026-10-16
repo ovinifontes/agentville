@@ -38,28 +38,33 @@ function someTranscripts(limit: number): string[] {
 describe('extractAction against real transcripts', () => {
   const transcripts = someTranscripts(5);
 
-  it.skipIf(transcripts.length === 0)('never throws and never leaks a raw tool id', () => {
-    let rendered = 0;
-    for (const transcript of transcripts) {
-      for (const line of fs.readFileSync(transcript, 'utf8').split('\n')) {
-        if (!line.trim()) {
-          continue;
-        }
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(line);
-        } catch {
-          continue;
-        }
-        expect(() => extractAction(parsed)).not.toThrow();
-        const result = extractAction(parsed);
-        if (result) {
-          rendered++;
-          expect(result).not.toMatch(/^toolu_/);
-          expect(result.length).toBeLessThan(80);
+  it.skipIf(transcripts.length === 0)(
+    'never throws and never leaks a raw tool id',
+    () => {
+      let rendered = 0;
+      for (const transcript of transcripts) {
+        for (const line of fs.readFileSync(transcript, 'utf8').split('\n')) {
+          if (!line.trim()) {
+            continue;
+          }
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          expect(() => extractAction(parsed)).not.toThrow();
+          const result = extractAction(parsed);
+          if (result) {
+            rendered++;
+            expect(result).not.toMatch(/^toolu_/);
+            expect(result.length).toBeLessThan(80);
+          }
         }
       }
-    }
-    expect(rendered).toBeGreaterThan(0);
-  });
+      expect(rendered).toBeGreaterThan(0);
+      // Reads whole real transcripts (one can be ~10 MB); the 5 s default flakes under parallel suites.
+    },
+    30_000,
+  );
 });

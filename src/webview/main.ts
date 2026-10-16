@@ -6,6 +6,7 @@
 import { createOffice } from './render/officeScene';
 import { BubbleLayer } from './ui/bubbles';
 import { NameTagLayer } from './ui/nameTags';
+import { EntranceSign } from './ui/entranceSign';
 import { FeedPanel } from './ui/feedPanel';
 import type { AgentView, ToExtension, ToWebview } from '../officeTypes';
 
@@ -30,11 +31,13 @@ const bubbles = new BubbleLayer(root, (agentId) => {
 });
 
 const nameTags = new NameTagLayer(root);
+const entrance = new EntranceSign(root);
 
 const scene = createOffice(root, assetsBaseUri);
 scene.onCharacterPositions((positions) => {
   nameTags.render(positions, scene.zoom);
   bubbles.render(positions);
+  entrance.render(scene.canvasOrigin, scene.zoom);
 });
 
 const overflow = document.createElement('div');

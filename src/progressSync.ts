@@ -192,6 +192,16 @@ export function saveDoc(file: string, doc: ProgressDoc, tag: string): ProgressDo
   return writeAtomic(file, JSON.stringify(doc), tag) ? doc : null;
 }
 
+/** Changes whenever the file is replaced (each atomic write lands a new inode); null when it cannot be stat'ed. */
+export function fileSignature(file: string): string | null {
+  try {
+    const stat = fs.statSync(file);
+    return `${String(stat.ino)}:${String(stat.mtimeMs)}:${String(stat.size)}`;
+  } catch {
+    return null;
+  }
+}
+
 /** Temp files of a write that crashed before its rename (a live write's temp lasts microseconds). */
 export function cleanStaleTemps(dir: string, now: number): void {
   try {

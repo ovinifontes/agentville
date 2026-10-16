@@ -173,6 +173,7 @@ export class OfficePanel {
   private readonly actions = new Map<string, string>();
   private openFeedAgentId: string | undefined;
   private webviewReady = false;
+  private postedProgress = ''; // the last progress view this webview got, as JSON
 
   static show(context: vscode.ExtensionContext, sources: OfficeSources): void {
     if (OfficePanel.current) {
@@ -221,6 +222,7 @@ export class OfficePanel {
     } else {
       // The webview (and its side panel) is destroyed while hidden.
       this.openFeedAgentId = undefined;
+      this.postedProgress = '';
     }
   }
 
@@ -228,6 +230,7 @@ export class OfficePanel {
     switch (message.type) {
       case 'ready':
         this.webviewReady = true;
+        this.postedProgress = ''; // a new webview has nothing yet
         this.push();
         this.pushProgress();
         return;
@@ -285,10 +288,16 @@ export class OfficePanel {
     }
   }
 
-  /** Post the progress view. Like push(), never while hidden; independent of monitoring. */
+  /** Post the progress view when it changed. Like push(), never while hidden; independent of monitoring. */
   private pushProgress(): void {
-    if (this.webviewReady && this.panel.visible) {
-      this.post({ type: 'progress', progress: this.sources.progress.current() });
+    if (!this.webviewReady || !this.panel.visible) {
+      return;
+    }
+    const progress = this.sources.progress.current();
+    const key = JSON.stringify(progress);
+    if (key !== this.postedProgress) {
+      this.postedProgress = key;
+      this.post({ type: 'progress', progress });
     }
   }
 

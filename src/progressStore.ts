@@ -15,6 +15,7 @@ import {
   cleanStaleTemps,
   docKey,
   emptyDoc,
+  fileSignature,
   leaseRole,
   listRequests,
   loadForHolder,
@@ -49,6 +50,7 @@ export class ProgressStore implements vscode.Disposable {
   private doc: ProgressDoc;
   private holding = false;
   private savedKey = '';
+  private followedSignature: string | null = null; // progress.json as this follower last read it
   private requestSeq = 0;
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly changed = new vscode.EventEmitter<void>();
@@ -172,6 +174,7 @@ export class ProgressStore implements vscode.Disposable {
   /** Stop holding and, if the lease is ours, delete it so another window can take over at once. */
   private release(): false {
     this.holding = false;
+    this.followedSignature = null;
     clearTimeout(this.saveTimer);
     this.saveTimer = undefined;
     if (this.readLease()?.holder === this.id) removeFile(this.leaseFile);
@@ -180,6 +183,10 @@ export class ProgressStore implements vscode.Disposable {
 
   private follow(): void {
     if (this.holding) this.release();
+    // A closed office costs no reads (G2): only a file the holder has replaced since is read again.
+    const signature = fileSignature(this.docFile);
+    if (signature !== null && signature === this.followedSignature) return;
+    this.followedSignature = signature;
     const onDisk = readDoc(this.docFile);
     // Only a valid doc replaces memory: an unreadable, corrupt or newer-schema file keeps the last
     // view. A reset this window requested stays visible until the holder has written it.

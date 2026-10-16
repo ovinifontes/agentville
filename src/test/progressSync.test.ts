@@ -8,6 +8,7 @@ import {
   cleanStaleTemps,
   docKey,
   emptyDoc,
+  fileSignature,
   leaseRole,
   listRequests,
   loadForHolder,
@@ -241,6 +242,16 @@ describe('progress file (rulings R7, R12)', () => {
 
   it('reports a failed write as null', () => {
     expect(saveDoc(path.join(dir, 'no', 'progress.json'), doc(), 'w1')).toBeNull();
+  });
+
+  it('signs a file so a replacement is noticed, and null when missing', () => {
+    expect(fileSignature(file)).toBeNull();
+    writeAtomic(file, good(1), 'w1');
+    const first = fileSignature(file);
+    expect(first).not.toBeNull();
+    expect(fileSignature(file)).toBe(first);
+    writeAtomic(file, good(1), 'w1');
+    expect(fileSignature(file)).not.toBe(first);
   });
 
   it('cleans only temp files older than a minute', () => {

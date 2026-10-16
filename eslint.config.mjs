@@ -12,7 +12,13 @@ import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescrip
 // parsing core"). Source files are flat under `src/`, so the layers are classified as
 // `boundaries/files` categories — `boundaries/elements` patterns match folders, not
 // individual files.
-const VSCODE_LAYER_MODULES = ['extension', 'sessionTreeDataProvider', 'treeItems', 'subagentTreeChildren'];
+const VSCODE_LAYER_MODULES = [
+  'extension',
+  'sessionTreeDataProvider',
+  'treeItems',
+  'subagentTreeChildren',
+  'officePanel',
+];
 const VSCODE_LAYER_GLOB = `src/{${VSCODE_LAYER_MODULES.join(',')}}.ts`;
 // Negated rather than a plain `src/*.ts` catch-all: categories match independently, so
 // an inclusive pattern would tag the VS Code modules as `core` as well and the layer
@@ -193,6 +199,56 @@ export default defineConfig(
     files: [VSCODE_LAYER_GLOB],
     rules: {
       '@typescript-eslint/no-invalid-void-type': 'off',
+    },
+  },
+  // Bundle boundaries, ordered broad to narrow: a later block replaces an earlier block's
+  // options for the same rule on the files both match, so each lists every ban it needs.
+  {
+    files: ['src/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [{ name: 'phaser', message: 'The extension bundle must not import Phaser.' }],
+          patterns: [{ group: ['phaser/*'], message: 'The extension bundle must not import Phaser.' }],
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/webview/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'vscode', message: 'The webview runs in a browser and cannot import the VS Code API.' },
+          ],
+        },
+      ],
+    },
+  },
+  // Simulation logic must stay renderer-agnostic: it is the unit-tested part of the
+  // webview, and importing Phaser or touching the DOM would make it untestable in vitest's
+  // node environment.
+  {
+    files: ['src/webview/simulation/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'vscode', message: 'The webview runs in a browser and cannot import the VS Code API.' },
+            { name: 'phaser', message: 'Simulation logic must not import Phaser.' },
+          ],
+          patterns: [{ group: ['phaser/*'], message: 'Simulation logic must not import Phaser.' }],
+        },
+      ],
+      'no-restricted-globals': [
+        'error',
+        { name: 'document', message: 'Simulation logic must not touch the DOM.' },
+        { name: 'window', message: 'Simulation logic must not touch the DOM.' },
+      ],
     },
   },
   // A suite's `describe` callback spans the whole file, so the per-function limits would

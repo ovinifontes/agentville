@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ESLint } from 'eslint';
@@ -53,6 +53,55 @@ describe('architectural lint rules', () => {
     const ruleIds = await ruleIdsFor(`import './test/sessionScanner.test';\n`, path.join(SRC, 'logger.ts'));
 
     expect(ruleIds).toContain('import-x/no-restricted-paths');
+  });
+
+  it('stops the extension bundle from importing Phaser', async () => {
+    const ruleIds = await ruleIdsFor(
+      `import Phaser from 'phaser';\nexport const probe: unknown = Phaser;\n`,
+      path.join(SRC, 'logger.ts'),
+    );
+
+    expect(ruleIds).toContain('no-restricted-imports');
+  });
+
+  it('stops the webview from importing the vscode package', async () => {
+    const ruleIds = await ruleIdsFor(
+      `import * as vscode from 'vscode';\nexport const probe: unknown = vscode;\n`,
+      path.join(SRC, 'webview', 'main.ts'),
+    );
+
+    expect(ruleIds).toContain('no-restricted-imports');
+  });
+});
+
+describe('webview simulation lint rules', () => {
+  // `src/webview/simulation/` doesn't exist yet and the typed config only lints files the
+  // project service can see, so the probe file is real on disk for the duration of the suite.
+  const simDir = path.join(SRC, 'webview', 'simulation');
+  const simFile = path.join(simDir, 'zzLintProbe.ts');
+
+  beforeAll(() => {
+    fs.mkdirSync(simDir, { recursive: true });
+    fs.writeFileSync(simFile, 'export {};\n');
+  });
+
+  afterAll(() => {
+    fs.rmSync(simFile, { force: true });
+    if (fs.readdirSync(simDir).length === 0) {
+      fs.rmdirSync(simDir);
+    }
+  });
+
+  it('stops webview simulation code from importing Phaser', async () => {
+    const ruleIds = await ruleIdsFor(`import Phaser from 'phaser';\nexport const probe: unknown = Phaser;\n`, simFile);
+
+    expect(ruleIds).toContain('no-restricted-imports');
+  });
+
+  it('stops webview simulation code from touching the DOM', async () => {
+    const ruleIds = await ruleIdsFor(`export const probe: unknown = document;\n`, simFile);
+
+    expect(ruleIds).toContain('no-restricted-globals');
   });
 });
 

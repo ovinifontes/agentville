@@ -70,6 +70,20 @@ describe('buildSnapshot', () => {
     expect(agents[0].action).toBeUndefined();
   });
 
+  it('drops finished subagents and grandchildren but keeps a stopped session', () => {
+    const subagents = [
+      subagent({
+        id: 'live',
+        children: [subagent({ id: 'live-child' }), subagent({ id: 'done-child', status: 'stopped' })],
+      }),
+      // Enough finished ones to overflow the cap: only live agents may count as `truncated`.
+      ...Array.from({ length: MAX_VISIBLE_AGENTS }, (_, i) => subagent({ id: `done-${i}`, status: 'stopped' })),
+    ];
+    const { agents, truncated } = buildSnapshot([session({ status: 'stopped', subagents })], new Map());
+    expect(agents.map((a) => a.id).sort()).toEqual(['live', 'live-child', 'sess-1']);
+    expect(truncated).toBe(0);
+  });
+
   it('inherits the session model when a subagent has none', () => {
     const { agents } = buildSnapshot([session({ model: 'claude-opus-5', subagents: [subagent()] })], new Map());
     expect(agents.find((a) => a.id === 'sub-1')?.model).toBe('claude-opus-5');

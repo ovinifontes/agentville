@@ -23,7 +23,9 @@ function subagentViews(session: Session, subagent: SubAgent, parentId: string): 
   // Grandchildren are parented to their own launcher, not to the session — nesting is
   // truncated at one level upstream, so this recursion is at most two deep.
   const children = (subagent.children ?? []).flatMap((child) => subagentViews(session, child, subagent.id));
-  return [self, ...children];
+  // A finished subagent is done for good, so it leaves the office (spec AC3). Sessions are
+  // never dropped here: one reads 'stopped' between turns and stays as a dimmed idle character.
+  return subagent.status === 'stopped' ? children : [self, ...children];
 }
 
 function sessionViews(session: Session): AgentView[] {

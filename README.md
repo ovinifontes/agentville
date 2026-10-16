@@ -19,19 +19,12 @@ sessions, subagents, models and live status — in one place inside VS Code.
 - **The office** — run **AgentVille: Open Office** (or click the game icon in the view title) to open a furnished pixel-art office in an editor tab. Every running session and subagent is a character: they enter by the door (marked by an _Entrance_ sign) as agents start and carry a name tag. Finished subagents walk out by the door; sessions stay on the floor, dimmed and without a bubble, between turns. Everything leaves when it drops off the tree's list (last hour) or past the 24 cap. Background agents the tree nests under the session that launched them are drawn too, named after their session title.
 - **Situated behaviour** — characters go where their work is and face their furniture: a desk when editing, running a command, planning, thinking or with no action yet (also Antigravity agents); the bookshelf when reading, searching or researching; the meeting table when delegating; and the lounge (coffee counter or sofa) once stopped. Chairs and the sofa are seats the character sits on; walking routes keep to the floor and only step onto a seat to sit down or off it to leave. A character moves to a different kind of place only once its new activity has held for 3 s, and stays at its spot for at least 5 s first; when every matching spot is taken it wanders and tries again. A live speech bubble shows what each working agent is doing right now (`Editing logParser.ts`, `Running npm test`); clicking it opens a side panel with that agent's recent activity, which stays after the agent finishes (marked `· finished`). Past 24 characters the rest collapse into a `+N waiting` chip. The scene is capped at 30 fps to keep idle CPU low. Art is CC0 (see [resources/ASSETS.md](resources/ASSETS.md)). Limits: Antigravity agents get no bubble because their logs carry no Claude-style tool calls, and characters do not avoid each other, so two walkers may pass through each other.
 - **Show all projects** — by default the tree and the office show the same sessions: those from the last hour, with Claude Code sessions limited to the current workspace (Antigravity sessions are always shown across projects). Click the globe icon in the view title (or set `agentville.showAllProjects`) to show Claude Code sessions from every project; the folder icon switches back.
-
-## Roadmap
-
-> ⚠️ **Not built yet.** Everything below is planned, not shipped. What the extension does
-> today is the list above — the tree view and the office. This section exists so you know
-> where the project is going, not to describe features you can use.
-
-The name is the plan: make the **living 2D pixel office** richer.
-
-- **Progression** — XP and levels per agent type, achievements, a ranking of who worked
-  the most, day/night cycle, and unlockable office decoration.
-
-The tree view stays either way — the office is an additional surface, not a replacement.
+- **Progression** — the office keeps score, locally. Each agent type earns **XP**: 1 per minute an agent is working (at most 60 s credited per refresh, so sleep never inflates it) and +10 each time a subagent run completes (counted once). The type is the subagent's name (`explorer-agent`); top-level sessions are `session` and background agents are `background agent`. Level _n_ needs `25·n·(n−1)` XP (L2 = 50, L3 = 150, L5 = 500, L10 = 2250), and name tags show it (`explorer-agent · Lv 3`).
+  - **Team panel** — the trophy button at the top-left of the office opens the ranking of types (XP, level, XP to next level, runs, working time), the office XP with the next decoration, and the achievements.
+  - **Achievements** — eight, each unlocked once and shown as a small toast in the office (never a VS Code notification; ones unlocked while the office was closed appear the next time you open it): _First hire_ (first completed subagent run), _Team player_ (five distinct subagent types completed a run), _Full house_ (six or more subagents working at once), _Night owl_ (an agent worked between 00:00 and 04:59), _Early bird_ (between 05:00 and 06:59), _Marathon_ (120 working minutes in one day), _Century_ (100 completed subagent runs) and _Veteran_ (an agent type reached level 5).
+  - **Day and night** — the light follows your local clock: day 07:00–17:00, a warm dusk until 19:00, turning blue until 21:00, night until 05:00 (desk monitors glow), then dawn back to day.
+  - **Decoration** — eight wall items (clock, landscape, portrait, poster, whiteboard, window, trophy shelf, certificate) unlock in that order as the office XP, the sum over all types, passes 100, 300, 600, 1000, 1500, 2200, 3000 and 4000. They hang on walls, so movement never changes.
+  - **Where it lives** — one progress file in the extension's global storage, shared by every window (one window writes at a time). XP counts agents from all your projects active in the last hour, and nothing leaves the machine. Progress starts when you install (or reset) with no retroactive XP, and turning it off pauses accrual.
 
 ## Requirements
 
@@ -86,6 +79,7 @@ To uninstall: `antigravity-ide --uninstall-extension soumatheusgomes.agentville`
 | Setting                      | Default | Scope       | Description                                                                                                                                    |
 | ---------------------------- | ------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `agentville.enabled`         | `true`  | application | Monitor sessions. Disabling stops all log reading in every window; re-enable via the eye icon or by editing this setting.                      |
+| `agentville.progression.enabled` | `true` | application | Let agent types earn XP, levels and achievements, and unlock office decoration. When disabled, nothing accrues and the office hides the game layer. |
 | `agentville.showAllProjects` | `false` | window      | Show Claude Code sessions from every project, not only the folders open in this window. Sessions that ended more than an hour ago stay hidden. |
 
 ## Usage
@@ -93,6 +87,7 @@ To uninstall: `antigravity-ide --uninstall-extension soumatheusgomes.agentville`
 - Open the **AgentVille** view from the activity bar.
 - Expand a brand → a session → _Working_ / _Completed_ to see subagents.
 - **Open Log File** / **Open Project Folder** are available on each session row (inline icons).
+- Run **AgentVille: Reset Office Progress** from the Command Palette to wipe XP, levels and achievements (asks for confirmation first).
 - Toggle monitoring on/off with the eye icon in the view title; the globe/folder icon toggles all projects vs. this workspace.
 
 Want to build or modify the extension instead? See

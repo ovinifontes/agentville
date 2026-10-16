@@ -1,6 +1,6 @@
 # AgentVille — Progression (sub-project 3)
 
-**Status:** approved by the fork's owner on 2026-10-16 (delegated: "do it alone and deliver it ready"); implemented by `docs/superpowers/plans/2026-10-16-office-progression.md`.
+**Status:** implemented (approved by the fork's owner on 2026-10-16, delegated: "do it alone and deliver it ready"); built by `docs/superpowers/plans/2026-10-16-office-progression.md`.
 **Builds on:** sub-project 1 (the office) and sub-project 2 (situated behaviour).
 
 ## Goal

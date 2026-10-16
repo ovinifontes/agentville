@@ -10,10 +10,9 @@
 import Phaser from 'phaser';
 import type { AgentView } from '../../officeTypes';
 import { reconcile, SPRITE_VARIANTS, type Character } from '../simulation/population';
-import { followActivity, pickTarget, step } from '../simulation/movement';
+import { followActivity, step } from '../simulation/movement';
 import { OFFICE_MAP, TILE_SIZE, WORLD_HEIGHT, WORLD_WIDTH } from '../simulation/world';
 
-const IDLE_PAUSE_MS = 1200;
 const CHARACTER_FRAME = { frameWidth: 16, frameHeight: 24 };
 const EMPTY_TILE = -1;
 /** Smallest fit zoom: below this the office is unreadable, so it overflows (clipped) instead. */
@@ -105,7 +104,6 @@ export class OfficeScene extends Phaser.Scene {
   private cast: Character[] = [];
   private pending: AgentView[] = [];
   private readonly sprites = new Map<string, Phaser.GameObjects.Sprite>();
-  private readonly pauseUntil = new Map<string, number>();
   private positionListener?: (positions: RenderedPosition[]) => void;
   // Canvas top-left relative to `parent`, refreshed whenever the Scale Manager resizes,
   // so the per-frame position report never forces a layout read.
@@ -230,9 +228,11 @@ export class OfficeScene extends Phaser.Scene {
       this.cast = reconcile(this.cast, this.pending);
     }
     // Advance a copy in place, so a spot claimed earlier this frame is already taken for the rest.
+    // Every walking, waiting and re-targeting decision is the simulation's (followActivity).
     this.cast = [...this.cast];
+    const frame = { now: time, cast: this.cast, random: Math.random };
     this.cast.forEach((character, index) => {
-      this.cast[index] = this.advance(character, time, delta);
+      this.cast[index] = followActivity(step(character, delta), frame);
     });
     this.syncSprites();
     this.emitPositions();
@@ -248,43 +248,12 @@ export class OfficeScene extends Phaser.Scene {
     this.game.loop.sleep();
   }
 
-  /**
-   * Walk; head for a new spot when the activity's kind of place changes; hold a claimed spot.
-   * Without a spot (its kind is full), stand for IDLE_PAUSE_MS on arrival, then try again or
-   * wander on. Leaving walks out without pausing. Searches only on a kind change or arrival.
-   */
-  private advance(character: Character, time: number, delta: number): Character {
-    const stepped = step(character, delta);
-    const moved = followActivity(stepped, Math.random, this.cast);
-    if (moved !== stepped) {
-      this.pauseUntil.delete(moved.id); // re-targeted: a pending wander pause no longer applies
-      return moved;
-    }
-    if (moved.state === 'leaving' || moved.x !== moved.targetX || moved.y !== moved.targetY) {
-      return moved;
-    }
-    if (moved.spot) {
-      return moved.state === 'idle' ? moved : { ...moved, state: 'idle' };
-    }
-    const pausedUntil = this.pauseUntil.get(moved.id);
-    if (pausedUntil === undefined) {
-      this.pauseUntil.set(moved.id, time + IDLE_PAUSE_MS);
-      return { ...moved, state: 'idle' };
-    }
-    if (time < pausedUntil) {
-      return moved;
-    }
-    this.pauseUntil.delete(moved.id);
-    return pickTarget(moved, Math.random, this.cast);
-  }
-
   private syncSprites(): void {
     const alive = new Set(this.cast.map((c) => c.id));
     for (const [id, sprite] of this.sprites) {
       if (!alive.has(id)) {
         sprite.destroy();
         this.sprites.delete(id);
-        this.pauseUntil.delete(id);
       }
     }
     for (const character of this.cast) {

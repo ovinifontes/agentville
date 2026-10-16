@@ -2,26 +2,26 @@ import { describe, it, expect } from 'vitest';
 import { DOOR, OFFICE_MAP, TILE_SIZE, isWalkable, tileAt } from '../webview/simulation/world';
 import { reachableTiles, type Point } from '../webview/simulation/pathfinding';
 import { reconcile, type Character } from '../webview/simulation/population';
-import { followActivity, pickTarget, step } from '../webview/simulation/movement';
+import { DWELL_MS, IDLE_PAUSE_MS, followActivity, pickTarget, step, type Frame } from '../webview/simulation/movement';
 import { SPOTS, claimSpot, placeFor, type PlaceKind } from '../webview/simulation/situated';
 import type { AgentView } from '../officeTypes';
 
-function agent(id: string, action?: string): AgentView {
+function agent(id: string, action?: string, status: AgentView['status'] = action ? 'working' : 'stopped'): AgentView {
   return {
     id,
     kind: 'session',
     name: id,
     projectName: 'proj',
     brand: 'claude-code',
-    status: action === undefined ? 'stopped' : 'working',
+    status,
     action,
     lastActivityAt: 1,
   };
 }
 
 /** A fresh character at the door. */
-function newcomer(id: string, action?: string): Character {
-  return reconcile([], [agent(id, action)])[0];
+function newcomer(id: string, action?: string, status?: AgentView['status']): Character {
+  return reconcile([], [agent(id, action, status)])[0];
 }
 
 function doing(character: Character, action: string | undefined): Character {
@@ -30,6 +30,19 @@ function doing(character: Character, action: string | undefined): Character {
 
 function noRandom(): number {
   throw new Error('no random draw expected');
+}
+
+/** A frame at `now` ms against `cast`; no random draw is expected unless `random` is given. */
+function at(now: number, cast: readonly Character[], random: () => number = noRandom): Frame {
+  return { now, cast, random };
+}
+
+function moving(character: Character): boolean {
+  return character.x !== character.targetX || character.y !== character.targetY;
+}
+
+function isSpotTile(point: Point): boolean {
+  return SPOTS.some((spot) => spot.x === point.x && spot.y === point.y);
 }
 
 function expectValidPath(from: Point, path: Point[]): void {
@@ -45,7 +58,7 @@ function expectValidPath(from: Point, path: Point[]): void {
 /** Steps to the target, asserting it never stands on a solid tile on the way. */
 function walk(character: Character): Character {
   let walker = character;
-  for (let i = 0; i < 40000 && (walker.x !== walker.targetX || walker.y !== walker.targetY); i++) {
+  for (let i = 0; i < 40000 && moving(walker); i++) {
     walker = step(walker, 5);
     expect(isWalkable(walker.x, walker.y)).toBe(true);
   }
@@ -87,11 +100,16 @@ describe('placeFor', () => {
     ['Juggling chainsaws', 'desk'],
     ['constructor', 'desk'],
   ])('%s → %s', (action, place) => {
-    expect(placeFor(action)).toBe(place);
+    expect(placeFor({ status: 'working', action })).toBe(place);
   });
 
-  it('sends an agent with no action (stopped) to the lounge', () => {
-    expect(placeFor(undefined)).toBe('lounge');
+  it('sends a working agent with no action yet (always so for Antigravity) to a desk', () => {
+    expect(placeFor({ status: 'working', action: undefined })).toBe('desk');
+  });
+
+  it('sends a stopped agent to the lounge, whatever its last action', () => {
+    expect(placeFor({ status: 'stopped', action: undefined })).toBe('lounge');
+    expect(placeFor({ status: 'stopped', action: 'Reading x.ts' })).toBe('lounge');
   });
 });
 
@@ -206,9 +224,27 @@ describe('claiming', () => {
   });
 });
 
+describe('wandering', () => {
+  it('picks reachable tiles off every spot, varying with the roll', () => {
+    const cast = fill('shelf', 'Reading x.ts');
+    const late = newcomer('late', 'Reading y.ts');
+    const rolls = Array.from({ length: 40 }, (_, i) => (i + 0.5) / 40);
+    const targets = rolls.map((roll) => {
+      const wandering = pickTarget(late, () => roll, cast);
+      const target = { x: wandering.targetX, y: wandering.targetY };
+      expect(wandering.spot).toBeUndefined();
+      expect(isSpotTile(target)).toBe(false);
+      expect(wandering.path.at(-1)).toEqual(target);
+      expectValidPath(DOOR, wandering.path);
+      return `${String(target.x)},${String(target.y)}`;
+    });
+    expect(new Set(targets).size).toBe(rolls.length);
+  });
+});
+
 describe('re-targeting', () => {
   it('sends a newcomer straight to a spot for its activity', () => {
-    const editor = followActivity(newcomer('alpha', 'Editing x.ts'), noRandom, []);
+    const editor = followActivity(newcomer('alpha', 'Editing x.ts'), at(0, []));
     expect(editor.place).toBe('desk');
     expect(editor.spot?.kind).toBe('desk');
     expect({ x: editor.targetX, y: editor.targetY }).toEqual({ x: editor.spot?.x, y: editor.spot?.y });
@@ -216,40 +252,90 @@ describe('re-targeting', () => {
     expectValidPath(DOOR, editor.path);
   });
 
-  it('leaves a character at its spot alone while the kind of place is unchanged', () => {
-    const seated = walk(followActivity(newcomer('alpha', 'Editing x.ts'), noRandom, []));
-    expect(seated.spot?.kind).toBe('desk');
-    const running = doing(seated, 'Running npm test');
-    expect(followActivity(running, noRandom, [running])).toBe(running);
+  it('sends a working agent with no action yet to a desk', () => {
+    expect(followActivity(newcomer('ag', undefined, 'working'), at(0, [])).spot?.kind).toBe('desk');
   });
 
-  it('does not re-search for a wanderer whose kind is still full', () => {
-    const cast = fill('shelf', 'Reading x.ts');
-    const wandering = pickTarget(newcomer('late', 'Reading y.ts'), () => 0.5, cast);
-    const stillReading = doing(wandering, 'Searching for TODO');
-    expect(followActivity(stillReading, noRandom, [...cast, stillReading])).toBe(stillReading);
+  it('records the arrival at a spot once, then holds it with no search while the kind is unchanged', () => {
+    const walked = walk(followActivity(newcomer('alpha', 'Editing x.ts'), at(0, [])));
+    const arrived = followActivity(walked, at(1000, [walked]));
+    expect(arrived.arrivedAt).toBe(1000);
+    expect(arrived.state).toBe('idle');
+    expect(followActivity(arrived, at(2000, [arrived]))).toBe(arrived);
+    const running = doing(arrived, 'Running npm test');
+    expect(followActivity(running, at(999_999, [running]))).toBe(running);
   });
 
-  it('walks to a new spot, without crossing furniture, when the kind changes', () => {
-    const seated = walk(followActivity(newcomer('alpha', 'Editing x.ts'), noRandom, []));
+  it(`stays ${String(DWELL_MS)} ms at a spot before a change of kind moves it, without crossing furniture`, () => {
+    expect(DWELL_MS).toBe(5000);
+    const walked = walk(followActivity(newcomer('alpha', 'Editing x.ts'), at(0, [])));
+    const seated = followActivity(walked, at(1000, [walked]));
     const reading = doing(seated, 'Reading x.ts');
-    const moved = followActivity(reading, noRandom, [reading]);
+    expect(followActivity(reading, at(1000 + DWELL_MS - 1, [reading]))).toBe(reading);
+    const moved = followActivity(reading, at(1000 + DWELL_MS, [reading]));
     expect(moved.place).toBe('shelf');
     expect(moved.spot?.kind).toBe('shelf');
+    expect(moved.arrivedAt).toBeUndefined();
     expect(moved.path.at(-1)).toEqual({ x: moved.spot?.x, y: moved.spot?.y });
     expectValidPath(seated, moved.path);
     walk(moved);
   });
 
+  it('re-targets a character still walking as soon as the kind changes', () => {
+    let editor = followActivity(newcomer('alpha', 'Editing x.ts'), at(0, []));
+    for (let i = 0; i < 150; i++) {
+      editor = step(editor, 5);
+    }
+    expect(moving(editor)).toBe(true);
+    const reading = doing(editor, 'Reading x.ts');
+    const moved = followActivity(reading, at(1, [reading]));
+    expect(moved.spot?.kind).toBe('shelf');
+    expect([walk(moved).x, walk(moved).y]).toEqual([moved.spot?.x, moved.spot?.y]);
+  });
+
+  it('does not re-search for a walking wanderer whose kind is still full', () => {
+    const cast = fill('shelf', 'Reading x.ts');
+    const wandering = pickTarget(newcomer('late', 'Reading y.ts'), () => 0.5, cast);
+    const stillReading = doing(wandering, 'Searching for TODO');
+    expect(followActivity(stillReading, at(0, [...cast, stillReading]))).toBe(stillReading);
+  });
+
+  it(`pauses a wanderer ${String(IDLE_PAUSE_MS)} ms on arrival, then tries for a spot again`, () => {
+    const cast = fill('shelf', 'Reading x.ts');
+    const walked = walk(pickTarget(newcomer('late', 'Reading y.ts'), () => 0.5, cast));
+    const paused = followActivity(walked, at(1000, [...cast, walked]));
+    expect(paused.arrivedAt).toBe(1000);
+    expect(paused.state).toBe('idle');
+    expect(followActivity(paused, at(1000 + IDLE_PAUSE_MS - 1, [...cast, paused]))).toBe(paused);
+    const onward = followActivity(
+      paused,
+      at(1000 + IDLE_PAUSE_MS, [...cast, paused], () => 0.25),
+    );
+    expect(onward.spot).toBeUndefined();
+    expect(moving(onward)).toBe(true);
+    const freed = followActivity(paused, at(1000 + IDLE_PAUSE_MS, [...cast.slice(1), paused]));
+    expect(freed.spot).toBe(cast[0].spot);
+  });
+
+  it('re-targets a pausing wanderer at once when its kind changes', () => {
+    const cast = fill('shelf', 'Reading x.ts');
+    const walked = walk(pickTarget(newcomer('late', 'Reading y.ts'), () => 0.5, cast));
+    const paused = followActivity(walked, at(1000, [...cast, walked]));
+    const editing = doing(paused, 'Editing x.ts');
+    expect(followActivity(editing, at(1001, [...cast, editing])).spot?.kind).toBe('desk');
+  });
+
   it('lets leaving override the activity, and re-claims a spot on return', () => {
-    const seated = walk(followActivity(newcomer('alpha', 'Editing x.ts'), noRandom, []));
+    const walked = walk(followActivity(newcomer('alpha', 'Editing x.ts'), at(0, [])));
+    const seated = followActivity(walked, at(1000, [walked]));
     expect(seated.spot).toBeDefined();
     const leaving = reconcile([seated], [])[0];
     expect(leaving.state).toBe('leaving');
     expect(leaving.spot).toBeUndefined();
-    expect(followActivity(leaving, noRandom, [leaving])).toBe(leaving);
+    expect(leaving.arrivedAt).toBeUndefined();
+    expect(followActivity(leaving, at(1001, [leaving]))).toBe(leaving);
     const back = reconcile([leaving], [seated.agent])[0];
-    const reseated = followActivity(back, noRandom, [back]);
+    const reseated = followActivity(back, at(1002, [back]));
     expect(reseated.spot).toBe(seated.spot);
     expectValidPath(back, reseated.path);
   });

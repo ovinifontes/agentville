@@ -2,11 +2,17 @@ import { SubAgent } from './types';
 import type { LogEntry } from './logParser';
 import { detectForkedSkillLaunch } from './forkedSkillDetector';
 
-/** Detect subagent starts/completions from one log entry and mutate the running map. */
-export function detectSubagents(json: LogEntry, currentSubagents: Map<string, SubAgent>): void {
+/** Detect subagent starts/completions from one log entry and mutate the running map.
+ * `resolveAgentIds`, when given, fills `.agentId` on the map's subagents from their sidecars —
+ * called only when a SendMessage target matches nothing (see detectSendMessageResume). */
+export function detectSubagents(
+  json: LogEntry,
+  currentSubagents: Map<string, SubAgent>,
+  resolveAgentIds?: () => void,
+): void {
   detectAntigravityCalls(json, currentSubagents);
   detectClaudeCalls(json, currentSubagents);
-  detectSendMessageResume(json, currentSubagents);
+  detectSendMessageResume(json, currentSubagents, resolveAgentIds);
   detectClaudeStandaloneCalls(json, currentSubagents);
   detectForkedSkillLaunch(json, currentSubagents);
   detectCompletions(json, currentSubagents);
@@ -103,6 +109,15 @@ function getClaudeModel(block: { input?: { model?: string } }): string | undefin
  * silently break that join and the resumed subagent would never get its real name/model (see
  * subagentMetadata.ts).
  *
+ * The agentId form is only known once subagentMetadata.ts has read the sidecar, which logParser
+ * does AFTER its line loop. An incremental parse usually has it already (the launch was read, and
+ * enriched, in an earlier pass), but a cold full parse (a window reload) meets the SendMessage
+ * first — the resume was missed and the subagent read 'stopped' while it worked. So on a miss the
+ * caller's `resolveAgentIds` reads the sidecars right then and the match is retried, keeping the
+ * resume at its place in line order: the resumed run's own <task-notification> (carrying this
+ * SendMessage's id, observed on a real session) still finds it later, so a cold and an
+ * incremental parse agree.
+ *
  * An unmatched `to` (name or agentId form) is a silent no-op: never fabricate a subagent from a
  * SendMessage alone.
  *
@@ -110,7 +125,11 @@ function getClaudeModel(block: { input?: { model?: string } }): string | undefin
  * re-invocation of an existing tool call already flips the matching id back to 'working' via
  * detectAntigravityCalls's unconditional `set()`.
  */
-function detectSendMessageResume(json: LogEntry, currentSubagents: Map<string, SubAgent>): void {
+function detectSendMessageResume(
+  json: LogEntry,
+  currentSubagents: Map<string, SubAgent>,
+  resolveAgentIds?: () => void,
+): void {
   if (json.message && Array.isArray(json.message.content)) {
     for (const block of json.message.content) {
       if (!isSendMessageCall(block) || !block.id) {
@@ -120,7 +139,7 @@ function detectSendMessageResume(json: LogEntry, currentSubagents: Map<string, S
       if (!to) {
         continue;
       }
-      const entry = findSubagentEntryByTarget(currentSubagents, to);
+      const entry = findResumeTarget(currentSubagents, to, resolveAgentIds);
       if (!entry) {
         continue;
       }
@@ -154,6 +173,21 @@ function getSendMessageTarget(block: { input?: unknown }): string | undefined {
   // widening the shared parser type (mirrors subagentMetadata.ts's sidecar field reads).
   const input = block.input as Record<string, unknown> | undefined;
   return typeof input?.to === 'string' ? input.to : undefined;
+}
+
+/** A miss may only mean the target's agentId hasn't been read from its sidecar yet (see
+ * detectSendMessageResume), so resolve agentIds once and retry. */
+function findResumeTarget(
+  currentSubagents: Map<string, SubAgent>,
+  target: string,
+  resolveAgentIds?: () => void,
+): [string, SubAgent] | undefined {
+  const entry = findSubagentEntryByTarget(currentSubagents, target);
+  if (entry || !resolveAgentIds) {
+    return entry;
+  }
+  resolveAgentIds();
+  return findSubagentEntryByTarget(currentSubagents, target);
 }
 
 /** Last (most recently launched) match wins on a reused name/agentId — Map iteration is insertion

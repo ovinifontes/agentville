@@ -23,6 +23,7 @@ interface LogLineContext {
   line: string;
   session: Session;
   currentSubagents: Map<string, SubAgent>;
+  resolveAgentIds: () => void;
   stats: fs.Stats;
 }
 
@@ -109,8 +110,16 @@ export class LogParser {
         currentSubagents.set(sub.id, sub);
       }
 
+      // A SendMessage resume can address a subagent by the agentId only its sidecar holds, and on a
+      // cold parse the post-loop enrichment below hasn't run yet (subagentDetector.ts's
+      // detectSendMessageResume). The detector calls this only when a SendMessage target matches
+      // nothing, so the sidecar read stays off the common path. Antigravity never writes
+      // SendMessage, so it never fires there.
+      const resolveAgentIds = (): void => {
+        enrichSubagentMetadata({ ...session, subagents: Array.from(currentSubagents.values()) });
+      };
       for (const line of lines) {
-        this.parseLogLine({ line, session, currentSubagents, stats });
+        this.parseLogLine({ line, session, currentSubagents, resolveAgentIds, stats });
       }
 
       session.subagents = Array.from(currentSubagents.values());
@@ -139,7 +148,7 @@ export class LogParser {
   }
 
   private parseLogLine(ctx: LogLineContext): void {
-    const { line, session, currentSubagents, stats } = ctx;
+    const { line, session, currentSubagents, resolveAgentIds, stats } = ctx;
     if (!line.trim()) {
       return;
     }
@@ -170,7 +179,7 @@ export class LogParser {
 
       this.detectSessionTitle(json, session);
 
-      detectSubagents(json, currentSubagents);
+      detectSubagents(json, currentSubagents, resolveAgentIds);
     } catch {
       // Ignore JSON parse errors
     }

@@ -369,11 +369,17 @@ describe('LogParser', () => {
     expect(session.subagents[0].status).toBe('working');
   });
 
-  it('recovers a line torn inside a multibyte character, using byte offsets not string length', () => {
-    // Locks the Buffer.byteLength(…, 'utf8') requirement: transcripts contain multibyte UTF-8
-    // (accents, emoji). Retreating the offset by a UTF-16 code-unit count instead of a byte count
-    // would land the next read at the wrong byte position — corrupting or re-losing the entry —
-    // even though the plain-ASCII case above would still pass.
+  it.each([
+    ['🚀', 2],
+    ['ã', 1],
+  ])('recovers a line torn inside a multibyte character (%s), using byte offsets', (char, into) => {
+    // Locks the byte-offset requirement: transcripts contain multibyte UTF-8 (accents, emoji).
+    // Retreating the offset by a UTF-16 code-unit count instead of a byte count would land the
+    // next read at the wrong byte position — corrupting or re-losing the entry — even though the
+    // plain-ASCII case above would still pass. Regression ('ã'): the held-back tail used to be
+    // measured after decoding; one byte of "ã" decodes to U+FFFD (3 bytes), so this torn FIRST
+    // line set the offset to -2, every later read threw (swallowed by parse) and the session
+    // read empty for good. ('🚀' only escaped by luck: -1 means "current position" to readSync.)
     const parser = new LogParser();
 
     const turn = {
@@ -381,24 +387,21 @@ describe('LogParser', () => {
       type: 'tool_use',
       name: 'Agent',
       id: 'toolu_multibyte',
-      input: { name: 'Café Agent ☕', task: 'handle 🚀 emoji across a torn read' },
+      input: { name: 'Café Agent ☕', task: 'handle 🚀 emoji across a torn read, configuração' },
     };
-    const fullLine = JSON.stringify(turn) + '\n';
-    const fullBuffer = Buffer.from(fullLine, 'utf8');
+    const fullBuffer = Buffer.from(JSON.stringify(turn) + '\n', 'utf8');
 
-    // Cut 2 bytes into the 4-byte UTF-8 encoding of the 🚀 emoji, so the fragment on disk ends
+    // Cut `into` bytes into the character's UTF-8 encoding, so the fragment on disk ends
     // mid-character — a plain string slice couldn't reliably reproduce this (JS strings are
     // UTF-16), so the cut is computed on the encoded bytes instead.
-    const emojiIndex = fullLine.indexOf('🚀');
-    const byteOffsetOfEmoji = Buffer.byteLength(fullLine.slice(0, emojiIndex), 'utf8');
-    const cutPoint = byteOffsetOfEmoji + 2;
+    const cutPoint = fullBuffer.indexOf(Buffer.from(char, 'utf8')) + into;
 
     fs.writeFileSync(tempFilePath, fullBuffer.subarray(0, cutPoint));
 
     let session = parser.parse(tempFilePath, 'claude-code');
     expect(session.subagents.length).toBe(0);
 
-    // The writer finishes the line — append the remaining bytes (rest of the emoji + rest of JSON).
+    // The writer finishes the line — append the remaining bytes (rest of the character + rest of JSON).
     fs.appendFileSync(tempFilePath, fullBuffer.subarray(cutPoint));
 
     session = parser.parse(tempFilePath, 'claude-code');

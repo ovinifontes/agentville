@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { Session, SubAgent } from './types';
+import { splitCompleteLines } from './completeLines';
 import { extractRenamedTitle, extractSessionName } from './nameExtractor';
 import { ProjectPathResolver } from './projectPathResolver';
 import { detectSubagents } from './subagentDetector';
@@ -92,7 +93,6 @@ export class LogParser {
 
     try {
       fs.readSync(fd, buffer, 0, bufferSize, lastReadOffset);
-      const newContent = buffer.toString('utf8');
 
       // Claude Code writes one line at a time; a chunk read mid-write can end partway through the
       // line currently being flushed (no trailing '\n' yet). That fragment must not be parsed now:
@@ -100,10 +100,9 @@ export class LogParser {
       // as something else — and since the offset would already sit past it, the real entry is lost
       // forever, because the next read starts after it, mid-JSON, and never resyncs. So hold the
       // fragment back and don't advance the offset past it, leaving it to be re-read whole once the
-      // writer finishes the line.
-      const endsWithNewline = newContent.endsWith('\n');
-      const lines = newContent.split('\n');
-      const incompleteTail = endsWithNewline ? '' : (lines.pop() ?? '');
+      // writer finishes the line. The split is made on the raw bytes (completeLines.ts), since
+      // the fragment can also end partway through a multi-byte character.
+      const { lines, bytes } = splitCompleteLines(buffer);
 
       const currentSubagents = new Map<string, SubAgent>();
       for (const sub of session.subagents) {
@@ -120,10 +119,11 @@ export class LogParser {
       enrichSubagentMetadata(session);
       session.lastInteractionTime = stats.mtimeMs;
 
-      // Byte length, not `.length` (UTF-16 code units): transcripts carry multibyte UTF-8 (accented
-      // text, emoji), so a char-counted retreat would land the next read mid-character instead of
-      // at the start of the held-back fragment.
-      return fileSize - Buffer.byteLength(incompleteTail, 'utf8');
+      // Bytes, not `.length` (UTF-16 code units), and counted before decoding: transcripts carry
+      // multibyte UTF-8 (accented text, emoji), so a char count — or the byte length of a decoded
+      // tail, where a torn character becomes a 3-byte U+FFFD — would land the next read
+      // mid-character, or before the file's start, instead of at the held-back fragment.
+      return lastReadOffset + bytes;
     } finally {
       fs.closeSync(fd);
     }

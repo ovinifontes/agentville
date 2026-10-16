@@ -11,6 +11,7 @@ const STARTUP_DELAY_MS = 10000;
 
 const CONFIG_SECTION = 'agentville';
 const ENABLED_KEY = 'enabled';
+const SHOW_ALL_KEY = 'showAllProjects';
 
 function isMonitoringEnabled(): boolean {
   return vscode.workspace.getConfiguration(CONFIG_SECTION).get<boolean>(ENABLED_KEY, true);
@@ -19,6 +20,10 @@ function isMonitoringEnabled(): boolean {
 function setMonitoringEnabled(value: boolean): void {
   // Application scope → persisted in user settings and shared across every window/instance.
   void vscode.workspace.getConfiguration(CONFIG_SECTION).update(ENABLED_KEY, value, vscode.ConfigurationTarget.Global);
+}
+
+function setShowAllProjects(value: boolean): void {
+  void vscode.workspace.getConfiguration(CONFIG_SECTION).update(SHOW_ALL_KEY, value, vscode.ConfigurationTarget.Global);
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -40,6 +45,9 @@ export function activate(context: vscode.ExtensionContext) {
   // (application-scoped) setting changes, so toggling in one instance stops them all.
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration(`${CONFIG_SECTION}.${SHOW_ALL_KEY}`)) {
+        provider.refresh(); // re-filter the tree and the office
+      }
       if (!e.affectsConfiguration(`${CONFIG_SECTION}.${ENABLED_KEY}`)) {
         return;
       }
@@ -95,6 +103,15 @@ function registerCommands(
     setMonitoringEnabled(false);
   });
   context.subscriptions.push(enableCmd, disableCmd);
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('agentville.showAllProjects', () => {
+      setShowAllProjects(true);
+    }),
+    vscode.commands.registerCommand('agentville.showThisProjectOnly', () => {
+      setShowAllProjects(false);
+    }),
+  );
 
   const openLogCmd = vscode.commands.registerCommand('agentville.openSessionLog', (item?: SessionTreeItem) => {
     logDebug(`command(): openSessionLog for ${item?.id || 'unknown'}`);

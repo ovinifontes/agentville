@@ -2,7 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { DOOR, OFFICE_MAP, TILE_SIZE, isWalkable, tileAt } from '../webview/simulation/world';
 import { findPath, type Point } from '../webview/simulation/pathfinding';
 import { reconcile, type Character } from '../webview/simulation/population';
-import { DWELL_MS, IDLE_PAUSE_MS, followActivity, pickTarget, step, type Frame } from '../webview/simulation/movement';
+import {
+  DWELL_MS,
+  IDLE_PAUSE_MS,
+  PLACE_SETTLE_MS,
+  followActivity,
+  pickTarget,
+  step,
+  type Frame,
+} from '../webview/simulation/movement';
 import { SPOTS, claimSpot, placeFor, type PlaceKind } from '../webview/simulation/situated';
 import type { AgentView } from '../officeTypes';
 
@@ -35,6 +43,17 @@ function noRandom(): number {
 /** A frame at `now` ms against `cast`; no random draw is expected unless `random` is given. */
 function at(now: number, cast: readonly Character[], random: () => number = noRandom): Frame {
   return { now, cast, random };
+}
+
+/** Sets each action at its frame time in turn, deciding after each one. */
+function play(character: Character, actions: readonly [number, string][]): Character {
+  return actions.reduce((c, [now, action]) => followActivity(doing(c, action), at(now, [c])), character);
+}
+
+/** An editor that walked to its desk and sat down at 1000 ms. */
+function seatedEditor(): Character {
+  const walked = walk(followActivity(newcomer('alpha', 'Editing x.ts'), at(0, [])));
+  return followActivity(walked, at(1000, [walked]));
 }
 
 function moving(character: Character): boolean {
@@ -267,13 +286,13 @@ describe('re-targeting', () => {
     expect(followActivity(running, at(999_999, [running]))).toBe(running);
   });
 
-  it(`stays ${String(DWELL_MS)} ms at a spot before a change of kind moves it, without crossing furniture`, () => {
+  it(`stays ${String(DWELL_MS)} ms at a spot before a settled change of kind moves it, without crossing furniture`, () => {
     expect(DWELL_MS).toBe(5000);
-    const walked = walk(followActivity(newcomer('alpha', 'Editing x.ts'), at(0, [])));
-    const seated = followActivity(walked, at(1000, [walked]));
-    const reading = doing(seated, 'Reading x.ts');
-    expect(followActivity(reading, at(1000 + DWELL_MS - 1, [reading]))).toBe(reading);
-    const moved = followActivity(reading, at(1000 + DWELL_MS, [reading]));
+    const seated = seatedEditor();
+    // Settled at 4500, but the dwell holds it until 6000.
+    const reading = play(seated, [[1500, 'Reading x.ts']]);
+    expect(play(reading, [[1000 + DWELL_MS - 1, 'Reading x.ts']]).spot).toBe(seated.spot);
+    const moved = play(reading, [[1000 + DWELL_MS, 'Reading x.ts']]);
     expect(moved.place).toBe('shelf');
     expect(moved.spot?.kind).toBe('shelf');
     expect(moved.arrivedAt).toBeUndefined();
@@ -282,16 +301,47 @@ describe('re-targeting', () => {
     walk(moved);
   });
 
-  it('re-targets a character still walking as soon as the kind changes', () => {
+  it(`re-targets a walking character once the new kind has held ${String(PLACE_SETTLE_MS)} ms`, () => {
+    expect(PLACE_SETTLE_MS).toBe(3000);
     let editor = followActivity(newcomer('alpha', 'Editing x.ts'), at(0, []));
     for (let i = 0; i < 150; i++) {
       editor = step(editor, 5);
     }
     expect(moving(editor)).toBe(true);
-    const reading = doing(editor, 'Reading x.ts');
-    const moved = followActivity(reading, at(1, [reading]));
+    const reading = play(editor, [[1, 'Reading x.ts']]);
+    expect(play(reading, [[PLACE_SETTLE_MS, 'Reading x.ts']]).spot).toBe(editor.spot);
+    const moved = play(reading, [[1 + PLACE_SETTLE_MS, 'Reading x.ts']]);
     expect(moved.spot?.kind).toBe('shelf');
     expect([walk(moved).x, walk(moved).y]).toEqual([moved.spot?.x, moved.spot?.y]);
+  });
+
+  it(`ignores a change of kind that lasts under ${String(PLACE_SETTLE_MS)} ms, walking or seated`, () => {
+    const walking = followActivity(newcomer('alpha', 'Editing x.ts'), at(0, []));
+    const seated = seatedEditor();
+    // Each flip back restarts the count: the last change to Reading is the one that must hold.
+    for (const [character, start] of [
+      [walking, 100],
+      [seated, 7000],
+    ] as const) {
+      const flips: [number, string][] = [
+        [start, 'Reading x.ts'],
+        [start + 2000, 'Editing x.ts'],
+        [start + 2500, 'Reading x.ts'],
+      ];
+      const settling = play(character, [...flips, [start + 2500 + PLACE_SETTLE_MS - 1, 'Reading x.ts']]);
+      expect(settling.spot).toBe(character.spot);
+      expect(play(settling, [[start + 2500 + PLACE_SETTLE_MS, 'Reading x.ts']]).spot?.kind).toBe('shelf');
+    }
+  });
+
+  it('places a newcomer or a returning character at once, and leaves at once mid-settle', () => {
+    expect(followActivity(newcomer('beta', 'Reading x.ts'), at(0, [])).spot?.kind).toBe('shelf');
+    const settling = play(seatedEditor(), [[9000, 'Reading x.ts']]);
+    const leaving = reconcile([settling], [])[0];
+    expect(leaving.state).toBe('leaving');
+    expect(followActivity(leaving, at(20_000, [leaving]))).toBe(leaving);
+    const back = reconcile([leaving], [settling.agent])[0];
+    expect(followActivity(back, at(9001, [back])).spot?.kind).toBe('shelf');
   });
 
   it('does not re-search for a walking wanderer whose kind is still full', () => {

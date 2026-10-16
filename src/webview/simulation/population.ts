@@ -28,6 +28,8 @@ export interface Character {
   place?: PlaceKind;
   /** Frame time (ms) it reached its current target; undefined while walking. */
   arrivedAt?: number;
+  /** A different kind of place the activity calls for, and the frame time (ms) it first did; cleared when they agree again. */
+  pending?: { kind: PlaceKind; since: number };
 }
 
 /** Non-negative string hash, stable across runs (Java's String.hashCode, made positive). */

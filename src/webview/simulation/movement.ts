@@ -4,11 +4,14 @@
 
 import type { Character } from './population';
 import { findPath, reachableTiles } from './pathfinding';
-import { claimSpot, isSpot, placeFor } from './situated';
+import { claimSpot, isSpot, placeFor, type PlaceKind } from './situated';
 
-const SPEED_PX_PER_MS = 0.02;
+/** About 2.2 tiles a second: a walk across the office takes less than a few tool calls (spec S5). */
+const SPEED_PX_PER_MS = 0.035;
 /** Minimum stay at a claimed spot before a change of activity sends the character elsewhere (spec S5). */
 export const DWELL_MS = 5000;
+/** How long a new kind of place must hold before a character with a spot acts on it (spec S5). */
+export const PLACE_SETTLE_MS = 3000;
 /** A wanderer's pause on arrival before it tries for a spot again, or wanders on. */
 export const IDLE_PAUSE_MS = 1200;
 
@@ -70,15 +73,29 @@ export function pickTarget(character: Character, random: () => number, cast: rea
   const place = placeFor(character.agent);
   const spot = claimSpot(character, place, cast);
   if (!spot) {
-    return { ...wander(character, random), place, spot: undefined, arrivedAt: undefined };
+    return { ...wander(character, random), place, spot: undefined, arrivedAt: undefined, pending: undefined };
   }
   const path = findPath(character, spot);
-  const target = { targetX: spot.x, targetY: spot.y, path, place, spot, arrivedAt: undefined };
+  const target = { targetX: spot.x, targetY: spot.y, path, place, spot, arrivedAt: undefined, pending: undefined };
   return { ...character, ...target, state: 'walking' };
 }
 
 function hasArrived(character: Character): boolean {
   return character.x === character.targetX && character.y === character.targetY;
+}
+
+/** Records when the activity started asking for a kind other than the current place; forgets it once they agree. */
+function observe(character: Character, kind: PlaceKind, now: number): Character {
+  if (kind === character.place) {
+    return character.pending ? { ...character, pending: undefined } : character;
+  }
+  return character.pending?.kind === kind ? character : { ...character, pending: { kind, since: now } };
+}
+
+/** A different kind of place is wanted and, for a character with a spot, has held PLACE_SETTLE_MS. */
+function placeChangedFor(character: Character, now: number): boolean {
+  const { pending } = character;
+  return pending !== undefined && (!character.spot || now - pending.since >= PLACE_SETTLE_MS);
 }
 
 /** Waited long enough where it stands: a wanderer's pause, or the dwell at a spot before a change of place. */
@@ -89,25 +106,28 @@ function doneWaiting(character: Character, placeChanged: boolean, now: number): 
 
 /**
  * The per-frame decision, after `step`. It searches only when it re-targets:
- * - walking, or without a spot, as soon as the activity needs a different kind of place;
- * - at a claimed spot, once it has been there DWELL_MS, and only for a different kind of place;
+ * - without a spot (entering, returning, wandering), as soon as the activity needs a different kind of place;
+ * - walking to a spot, once that different kind has held PLACE_SETTLE_MS;
+ * - at a claimed spot, once it has also been there DWELL_MS;
  * - a wanderer, after pausing IDLE_PAUSE_MS on arrival (it tries for a spot again first).
- * Otherwise it returns the same character. Arrival is recorded once; leaving is left alone.
+ * Otherwise it returns the same character, or a copy that only records a change of kind or
+ * the arrival. Leaving is left alone.
  */
 export function followActivity(character: Character, frame: Frame): Character {
   if (character.state === 'leaving') {
     return character;
   }
-  const placeChanged = placeFor(character.agent) !== character.place;
-  const arrived = hasArrived(character);
-  if (placeChanged && !(arrived && character.spot)) {
-    return pickTarget(character, frame.random, frame.cast);
+  const current = observe(character, placeFor(character.agent), frame.now);
+  const placeChanged = placeChangedFor(current, frame.now);
+  const arrived = hasArrived(current);
+  if (placeChanged && !(arrived && current.spot)) {
+    return pickTarget(current, frame.random, frame.cast);
   }
   if (!arrived) {
-    return character;
+    return current;
   }
-  if (character.arrivedAt === undefined) {
-    return { ...character, state: 'idle', arrivedAt: frame.now };
+  if (current.arrivedAt === undefined) {
+    return { ...current, state: 'idle', arrivedAt: frame.now };
   }
-  return doneWaiting(character, placeChanged, frame.now) ? pickTarget(character, frame.random, frame.cast) : character;
+  return doneWaiting(current, placeChanged, frame.now) ? pickTarget(current, frame.random, frame.cast) : current;
 }

@@ -261,19 +261,19 @@ export class OfficeScene extends Phaser.Scene {
       sprite.setPosition(character.x, character.y);
       sprite.setDepth(character.y);
       sprite.setAlpha(character.agent.status === 'working' ? 1 : STOPPED_ALPHA);
+      // Per frame, like alpha: a background agent switches between subagent (nested under its
+      // launcher) and session (orphan) while on screen. The walk frames follow kind via spriteSet.
+      sprite.setScale(character.agent.kind === 'subagent' ? SUBAGENT_SCALE : 1);
       this.animate(sprite, character);
     }
   }
 
-  /** Kind and brand never change for an id, so scale and tint are set once. */
+  /** Brand never changes for an id, so the tint is set once; scale follows kind in syncSprites. */
   private addSprite(character: Character): Phaser.GameObjects.Sprite {
     // Feet on the character's point: the 16 px body sits bottom-aligned in the 24 px frame.
     const sprite = this.add
       .sprite(character.x, character.y, 'characters', standingFrame(character, DOWN))
       .setOrigin(0.5, 1);
-    if (character.agent.kind === 'subagent') {
-      sprite.setScale(SUBAGENT_SCALE);
-    }
     if (character.agent.brand === 'antigravity') {
       sprite.setTint(ANTIGRAVITY_TINT);
     }

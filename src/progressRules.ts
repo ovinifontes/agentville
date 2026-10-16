@@ -25,6 +25,7 @@ export interface ProgressState {
   completedTypes: string[]; // Distinct types with a completed run
   totalRuns: number;
   prevWorking: string[]; // Ids seen working at the previous tick
+  prevSessions: string[]; // Top-level session ids seen at the previous tick (ruling R10)
   lastTickAt: number | null;
   dayKey: string; // Local day, YYYY-MM-DD
   dayMs: number; // Working ms credited in dayKey
@@ -60,6 +61,7 @@ export function freshState(): ProgressState {
     completedTypes: [],
     totalRuns: 0,
     prevWorking: [],
+    prevSessions: [],
     lastTickAt: null,
     dayKey: '',
     dayMs: 0,
@@ -105,6 +107,7 @@ interface Flat {
   working: boolean;
   stopped: boolean;
   isSub: boolean;
+  session: string; // Top-level session it belongs to
 }
 
 function typeOfSub(sub: SubAgent): string {
@@ -112,21 +115,22 @@ function typeOfSub(sub: SubAgent): string {
   return sub.name.trim().toLowerCase() || 'agent';
 }
 
-function flattenSub(sub: SubAgent): Flat[] {
+function flattenSub(sub: SubAgent, session: string): Flat[] {
   const self: Flat = {
     id: sub.id,
     type: typeOfSub(sub),
     working: sub.status === 'working',
     stopped: sub.status === 'stopped',
     isSub: true,
+    session,
   };
-  return [self, ...(sub.children ?? []).flatMap(flattenSub)];
+  return [self, ...(sub.children ?? []).flatMap((child) => flattenSub(child, session))];
 }
 
 function flatten(sessions: readonly Session[]): Flat[] {
   return sessions.flatMap((s) => [
-    { id: s.id, type: SESSION_TYPE, working: s.status === 'working', stopped: false, isSub: false },
-    ...s.subagents.flatMap(flattenSub),
+    { id: s.id, type: SESSION_TYPE, working: s.status === 'working', stopped: false, isSub: false, session: s.id },
+    ...s.subagents.flatMap((sub) => flattenSub(sub, s.id)),
   ]);
 }
 
@@ -164,18 +168,27 @@ function seedRuns(state: ProgressState, stopped: Flat[]): ProgressState {
   return { ...state, countedIds: ids.slice(-MAX_COUNTED_IDS) };
 }
 
+/**
+ * A session not seen at the previous tick (continued after more than an hour of quiet, or still
+ * open across a reset) brings its finished runs as history: seeded like a first tick (ruling R10).
+ */
 function creditRuns(state: ProgressState, stopped: Flat[]): ProgressState {
   if (state.lastTickAt === null) return seedRuns(state, stopped);
-  const seen = new Set(state.countedIds);
+  const known = new Set(state.prevSessions);
+  const base = seedRuns(
+    state,
+    stopped.filter((f) => !known.has(f.session)),
+  );
+  const seen = new Set(base.countedIds);
   const fresh = stopped.filter((f, i) => !seen.has(f.id) && stopped.findIndex((g) => g.id === f.id) === i);
-  const types = fresh.reduce((acc, f) => addStats(acc, f.type, { workMs: 0, runs: 1 }), state.types);
-  const completed = new Set([...state.completedTypes, ...fresh.map((f) => f.type)]);
+  const types = fresh.reduce((acc, f) => addStats(acc, f.type, { workMs: 0, runs: 1 }), base.types);
+  const completed = new Set([...base.completedTypes, ...fresh.map((f) => f.type)]);
   return {
-    ...state,
+    ...base,
     types,
-    countedIds: [...state.countedIds, ...fresh.map((f) => f.id)].slice(-MAX_COUNTED_IDS),
+    countedIds: [...base.countedIds, ...fresh.map((f) => f.id)].slice(-MAX_COUNTED_IDS),
     completedTypes: [...completed],
-    totalRuns: state.totalRuns + fresh.length,
+    totalRuns: base.totalRuns + fresh.length,
   };
 }
 
@@ -192,6 +205,7 @@ export function applyTick(state: ProgressState, sessions: readonly Session[], cl
   const ticked: ProgressState = {
     ...next,
     prevWorking: working.map((f) => f.id),
+    prevSessions: sessions.map((s) => s.id),
     lastTickAt: clock.now,
     peak: Math.max(next.peak, concurrent),
   };
@@ -247,6 +261,7 @@ export function migrate(raw: unknown): ProgressState {
       completedTypes: strs(raw.completedTypes),
       totalRuns: Math.floor(num(raw.totalRuns)),
       prevWorking: strs(raw.prevWorking),
+      prevSessions: strs(raw.prevSessions),
       lastTickAt: typeof raw.lastTickAt === 'number' && Number.isFinite(raw.lastTickAt) ? raw.lastTickAt : null,
       dayKey: typeof raw.dayKey === 'string' ? raw.dayKey : '',
       dayMs: num(raw.dayMs),

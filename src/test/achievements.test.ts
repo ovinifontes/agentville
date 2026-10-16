@@ -25,8 +25,9 @@ const sess = (subagents: SubAgent[], status: Session['status'] = 'stopped'): Ses
   logFilePath: '/p/s1.jsonl',
   type: 'claude-code',
 });
-// Already ticked once (empty office): the first tick only seeds history (R3).
-const fresh = (): ProgressState => applyTick(freshState(), [], { now: at(11), tzOffsetMinutes: 0 }).state;
+// Already ticked once with session s1 idle: the first tick only seeds history (R3), and a session
+// first seen later brings its history uncredited (R10).
+const fresh = (): ProgressState => applyTick(freshState(), [sess([])], { now: at(11), tzOffsetMinutes: 0 }).state;
 const tick = (st: ProgressState, s: Session[], now: number) => applyTick(st, s, { now, tzOffsetMinutes: 0 });
 const stoppedN = (n: number, prefix = 'r', name = 'explorer') =>
   Array.from({ length: n }, (_, i) => sub(`${prefix}${i}`, name, true));

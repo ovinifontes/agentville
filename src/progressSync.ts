@@ -85,7 +85,7 @@ export function applyRequests(doc: ProgressDoc, requests: readonly ProgressReque
 }
 
 /**
- * What must reach disk. Per-tick bookkeeping (lastTickAt, prevWorking, day total, peak) rides
+ * What must reach disk. Per-tick bookkeeping (lastTickAt, prevWorking, prevSessions, day total, peak) rides
  * along with the next real change; only whether the clock is paused counts on its own, so a
  * window taking over after progression was off seeds instead of crediting the gap.
  */

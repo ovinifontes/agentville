@@ -39,8 +39,8 @@ function sess(subagents: SubAgent[] = [], over: Partial<Session> = {}): Session 
 }
 const clock = (now: number, tz = 0) => ({ now, tzOffsetMinutes: tz });
 
-// A state that already ticked once (empty office), so later stopped runs are genuinely new.
-const warm = (): ProgressState => applyTick(freshState(), [], clock(T0 - MIN)).state;
+// A state that already ticked once with session s1 open and idle, so its later stopped runs are genuinely new.
+const warm = (): ProgressState => applyTick(freshState(), [sess()], clock(T0 - MIN)).state;
 
 function run(sessions: Session[], times: number[], opts: { from?: ProgressState; tz?: number } = {}) {
   return times.reduce((st, t) => applyTick(st, sessions, clock(t, opts.tz)).state, opts.from ?? warm());
@@ -167,6 +167,37 @@ describe('first tick seeding (R3)', () => {
   });
 });
 
+describe('sessions re-entering view (R10)', () => {
+  const done = (id: string, name = 'explorer') => sub({ id, name, status: 'stopped' });
+  const old = (subagents: SubAgent[]) => sess(subagents, { id: 'old', status: 'working' });
+  it('an old session re-entering view earns nothing for its history, then +10 for a run that finishes later', () => {
+    const history = Array.from({ length: 25 }, (_, i) => done(`h${i}`, `type-${String(i % 6)}`));
+    const back = applyTick(warm(), [sess(), old(history)], clock(T0));
+    expect(officeXp(back.state)).toBe(0);
+    expect(back.state.totalRuns).toBe(0);
+    expect(back.unlocked).toEqual([]);
+    const later = applyTick(back.state, [sess(), old([...history, done('new')])], clock(T0 + 1000)).state;
+    expect(later.totalRuns).toBe(1);
+    expect(later.types.explorer.runs).toBe(1);
+  });
+  it('a new run in a continuing session still earns, grandchildren included', () => {
+    const st = run(
+      [sess([done('a', 'planner'), sub({ id: 'p', status: 'stopped', children: [done('g', 'reviewer')] })])],
+      [T0],
+    );
+    expect(st.totalRuns).toBe(3);
+    expect(Object.keys(st.types).sort()).toEqual(['explorer', 'planner', 'reviewer']);
+  });
+  it('remembers only the sessions of the last tick', () => {
+    const st = run([sess([], { id: 'x' })], [T0, T0 + MIN]);
+    expect(st.prevSessions).toEqual(['x']);
+    const gone = applyTick(st, [sess([done('late')], { id: 'y' })], clock(T0 + 2 * MIN)).state;
+    expect(gone.prevSessions).toEqual(['y']);
+    expect(gone.totalRuns).toBe(0);
+    expect(gone.countedIds).toContain('late');
+  });
+});
+
 describe('pause and re-enable (progression setting)', () => {
   const done = (id: string) => sub({ id, status: 'stopped' });
   it('credits neither time nor runs from the disabled period, and keeps earlier counted ids', () => {
@@ -235,6 +266,7 @@ describe('migrate', () => {
     });
     expect(m.types).toEqual({ a: { workMs: 0, runs: 0 } });
     expect(m.countedIds).toEqual(['k']);
+    expect(m.prevSessions).toEqual([]); // a file from before R10: every visible session is new once
     expect(m.achievements).toEqual({});
   });
 });

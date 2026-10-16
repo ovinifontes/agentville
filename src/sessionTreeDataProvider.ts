@@ -204,7 +204,10 @@ export class SessionTreeDataProvider implements vscode.TreeDataProvider<TreeItem
    * nested background-agent map it produces is stored for getChildren() to render under launchers. */
   private getVisibleSessions(): Session[] {
     const activeFolders = vscode.workspace.workspaceFolders;
-    const activePaths = activeFolders ? activeFolders.map((f) => path.normalize(f.uri.fsPath).toLowerCase()) : [];
+    // An empty list means "no workspace filter" in assembleVisibleSessions, which is what showAllProjects wants.
+    const showAll = vscode.workspace.getConfiguration('agentville').get<boolean>('showAllProjects', false);
+    const activePaths =
+      activeFolders && !showAll ? activeFolders.map((f) => path.normalize(f.uri.fsPath).toLowerCase()) : [];
     const { topLevel, nestedAgents } = assembleVisibleSessions(
       Array.from(this.sessions.values()),
       activePaths,

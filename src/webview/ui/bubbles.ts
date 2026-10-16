@@ -47,8 +47,20 @@ export class BubbleLayer {
     const key = order.join(' ');
     if (key !== this.stackKey) {
       this.stackKey = key;
-      this.root.append(...order.flatMap((id) => this.nodes.get(id) ?? []));
+      this.restack(order.flatMap((id) => this.nodes.get(id) ?? []));
     }
+  }
+
+  /** Puts the nodes in paint order. Moving a focused button blurs it, so the rest go around it instead. */
+  private restack(nodes: readonly HTMLButtonElement[]): void {
+    const focused = nodes.find((node) => node === document.activeElement);
+    if (!focused) {
+      this.root.append(...nodes);
+      return;
+    }
+    const at = nodes.indexOf(focused);
+    focused.before(...nodes.slice(0, at));
+    focused.after(...nodes.slice(at + 1));
   }
 
   /** Creates the node if needed and re-measures it only when its text changed. */

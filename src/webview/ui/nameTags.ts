@@ -4,8 +4,8 @@
 
 import type { RenderedPosition } from '../render/officeScene';
 import { pruneNodes } from './pruneNodes';
+import { tagText } from './progressFormat';
 
-const MAX_NAME_CHARS = 18;
 // screenY is the head top; the 16 px body plus a 2 px gap puts the tag just under the feet.
 // Characters are drawn at a fractional zoom, so the offset scales with it.
 const BELOW_FEET_PX = 18;
@@ -13,7 +13,14 @@ const BELOW_FEET_PX = 18;
 export class NameTagLayer {
   private readonly nodes = new Map<string, HTMLDivElement>();
 
+  private levels = new Map<string, number>();
+
   constructor(private readonly root: HTMLElement) {}
+
+  /** Levels by agent id; call on every snapshot. Absent entries show the bare name. */
+  setLevels(agents: readonly { id: string; level?: number }[]): void {
+    this.levels = new Map(agents.flatMap((a) => (a.level === undefined ? [] : [[a.id, a.level] as const])));
+  }
 
   render(positions: readonly RenderedPosition[], zoom: number): void {
     pruneNodes(this.nodes, new Set(positions.map((p) => p.id)));
@@ -25,7 +32,7 @@ export class NameTagLayer {
         this.root.appendChild(node);
         this.nodes.set(position.id, node);
       }
-      const text = position.name.length > MAX_NAME_CHARS ? `${position.name.slice(0, MAX_NAME_CHARS)}…` : position.name;
+      const text = tagText(position.name, this.levels.get(position.id));
       if (node.textContent !== text) {
         node.textContent = text;
       }

@@ -1,9 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { SubagentTranscriptReader, subagentTranscriptPath, workingTranscripts } from '../subagentTranscriptReader';
 import type { Session, SubAgent } from '../types';
+import { logDebug } from '../logger';
+
+vi.mock('../logger', () => ({ logDebug: vi.fn() }));
 
 const tempDir = path.join(os.tmpdir(), 'agentville-subagent-test');
 const filePath = path.join(tempDir, 'agent-abc.jsonl');
@@ -140,6 +143,23 @@ describe('SubagentTranscriptReader', () => {
     const second = reader.read(filePath);
     expect(second.entries).toHaveLength(1);
     expect(second.action).toBe('Reading split.ts');
+  });
+
+  it('reads only the last 256 KB of a transcript it has never seen, skipping the cut line silently', () => {
+    const window = 256 * 1024;
+    const line = assistantLine('Read', { file_path: '/a/old.ts' });
+    const last = assistantLine('Bash', { command: 'npm test' });
+    // Lengths chosen so the window starts mid-line.
+    expect((window - last.length) % line.length).not.toBe(0);
+    fs.writeFileSync(filePath, line.repeat(Math.ceil((2 * window) / line.length)) + last);
+    vi.mocked(logDebug).mockClear();
+
+    const result = new SubagentTranscriptReader().read(filePath);
+
+    expect(result.action).toBe('Running npm test');
+    // Every complete line inside the window, the last one included; the fragment it starts in is dropped.
+    expect(result.entries).toHaveLength(Math.floor((window - last.length) / line.length) + 1);
+    expect(logDebug).not.toHaveBeenCalled();
   });
 
   describe('a read that ends inside a multi-byte character', () => {

@@ -16,6 +16,12 @@ import { logDebug } from './logger';
 import type { FeedEntry } from './officeTypes';
 import type { Session } from './types';
 
+// The first read of a file this reader has never seen covers only its tail: the office needs
+// just the last few entries (the feed keeps 20, the bubble one action), and reading a 101 MB
+// transcript whole blocked the extension host for ~370 ms. The line the window starts inside
+// fails JSON.parse and is skipped like any malformed line.
+const FIRST_READ_BYTES = 256 * 1024;
+
 export interface SubagentRead {
   action?: string;
   entries: FeedEntry[];
@@ -116,10 +122,19 @@ function parseLines(lines: string[]): SubagentRead {
       }
       action = extractAction(parsed) ?? action;
     } catch {
-      // Complete lines only reach here, so a line that fails to parse is genuinely malformed.
+      // Complete lines only reach here, so a line that fails to parse is genuinely malformed —
+      // or the cut head of a first read's window. Either way it is skipped, silently.
     }
   }
   return { action, entries };
+}
+
+function startOffset(size: number, previous: number | undefined): number {
+  if (previous === undefined) {
+    return Math.max(0, size - FIRST_READ_BYTES);
+  }
+  // A file that shrank was rotated or rewritten — start over rather than read garbage.
+  return size < previous ? 0 : previous;
 }
 
 export class SubagentTranscriptReader {
@@ -131,9 +146,7 @@ export class SubagentTranscriptReader {
         return { action: undefined, entries: [] };
       }
       const size = fs.statSync(transcriptPath).size;
-      const previous = this.offsets.get(transcriptPath) ?? 0;
-      // A file that shrank was rotated or rewritten — start over rather than read garbage.
-      const start = size < previous ? 0 : previous;
+      const start = startOffset(size, this.offsets.get(transcriptPath));
       if (size === start) {
         return { action: undefined, entries: [] };
       }

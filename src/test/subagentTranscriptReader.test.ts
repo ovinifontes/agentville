@@ -83,4 +83,17 @@ describe('SubagentTranscriptReader', () => {
     const reader = new SubagentTranscriptReader();
     expect(reader.read(filePath)).toEqual({ action: undefined, entries: [] });
   });
+
+  it('holds back a partially written trailing line until it is complete', () => {
+    const line = assistantLine('Read', { file_path: '/a/split.ts' });
+    const cut = Math.floor(line.length / 2);
+    fs.writeFileSync(filePath, line.slice(0, cut));
+    const reader = new SubagentTranscriptReader();
+    expect(reader.read(filePath)).toEqual({ action: undefined, entries: [] });
+
+    fs.appendFileSync(filePath, line.slice(cut));
+    const second = reader.read(filePath);
+    expect(second.entries).toHaveLength(1);
+    expect(second.action).toBe('Reading split.ts');
+  });
 });

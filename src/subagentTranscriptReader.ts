@@ -76,10 +76,10 @@ function readBytes(transcriptPath: string, start: number, end: number): string {
   }
 }
 
-function parseChunk(chunk: string): SubagentRead {
+function parseLines(lines: string[]): SubagentRead {
   const entries: FeedEntry[] = [];
   let action: string | undefined;
-  for (const line of chunk.split('\n')) {
+  for (const line of lines) {
     if (!line.trim()) {
       continue;
     }
@@ -91,7 +91,7 @@ function parseChunk(chunk: string): SubagentRead {
       }
       action = extractAction(parsed) ?? action;
     } catch {
-      // A partially-written trailing line is normal while an agent is mid-append.
+      // Complete lines only reach here, so a line that fails to parse is genuinely malformed.
     }
   }
   return { action, entries };
@@ -113,8 +113,16 @@ export class SubagentTranscriptReader {
         return { action: undefined, entries: [] };
       }
       const chunk = readBytes(transcriptPath, start, size);
-      this.offsets.set(transcriptPath, size);
-      return parseChunk(chunk);
+      // Same strategy as LogParser: a chunk read mid-append can end partway through the line
+      // being written (no trailing '\n' yet). Parsing that fragment would drop it, and the next
+      // read would start mid-JSON and drop the remainder too, losing the entry for good. So hold
+      // the fragment back: don't advance the offset past it, and re-read it whole once finished.
+      // A chunk with no newline at all is entirely a fragment and leaves the offset unchanged.
+      const lines = chunk.split('\n');
+      const incompleteTail = chunk.endsWith('\n') ? '' : (lines.pop() ?? '');
+      // Byte length, not `.length`: multibyte UTF-8 would otherwise land the offset mid-character.
+      this.offsets.set(transcriptPath, size - Buffer.byteLength(incompleteTail, 'utf8'));
+      return parseLines(lines);
     } catch (error) {
       logDebug(`SubagentTranscriptReader.read failed for ${transcriptPath}: ${String(error)}`);
       return { action: undefined, entries: [] };

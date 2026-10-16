@@ -18,7 +18,7 @@ const CHARACTER_FRAME = { frameWidth: 16, frameHeight: 24 };
 const EMPTY_TILE = -1;
 /** Smallest fit zoom: below this the office is unreadable, so it overflows (clipped) instead. */
 const MIN_ZOOM = 0.5;
-/** Zoom changes below this are floating-point noise; ignoring them stops resize loops. */
+/** Defensive guard: setZoom re-enters fit() synchronously, so near-equal zooms must not loop. */
 const ZOOM_EPSILON = 1e-6;
 
 /** Map character → frame index in tiles.png, as recorded in resources/ASSETS.md. */
@@ -223,7 +223,7 @@ export class OfficeScene extends Phaser.Scene {
     this.game.loop.sleep();
   }
 
-  /** Walk; on arrival stand for IDLE_PAUSE_MS, then wander on. Leaving walks straight out. */
+  /** Walk; on arrival stand for IDLE_PAUSE_MS, then wander on. Leaving walks out without pausing. */
   private advance(character: Character, time: number, delta: number): Character {
     const moved = step(character, delta);
     if (moved.state === 'leaving' || moved.x !== moved.targetX || moved.y !== moved.targetY) {
@@ -274,7 +274,7 @@ export class OfficeScene extends Phaser.Scene {
     return sprite;
   }
 
-  /** Walk toward the target, or stand on the first frame of the direction last walked. */
+  /** Walk toward the next waypoint (else the target), or stand on the first frame of the direction last walked. */
   private animate(sprite: Phaser.GameObjects.Sprite, character: Character): void {
     const waypoint = character.path.at(0);
     const dx = (waypoint?.x ?? character.targetX) - character.x;

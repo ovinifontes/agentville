@@ -208,7 +208,7 @@ into the webview that nobody is reading.
 
 ## 7. World and characters
 
-- **Map:** fixed 40×24 tiles at 16px, rendered at integer scale to fit the panel. No camera
+- **Map:** fixed 40×24 tiles at 16px, rendered at integer scale to fit the panel. (Superseded 2026-10-15: the owner replaced integer scale with a fractional fit; see docs/superpowers/plans/2026-10-15-office-fit-and-pathfinding.md.) No camera
   panning, no zoom, no scrolling — the whole office is always on screen.
 - **The map is furnished and zoned**, not an empty room. It is authored once as static data
   (a tile grid plus a list of placed objects) and rendered as a real tilemap — desks with

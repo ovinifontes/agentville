@@ -26,6 +26,8 @@ export interface Character {
   spot?: Spot;
   /** Kind of place last targeted for; a different kind for the current activity means re-target. */
   place?: PlaceKind;
+  /** Frame time (ms) it reached its current target; undefined while walking. */
+  arrivedAt?: number;
 }
 
 /** Non-negative string hash, stable across runs (Java's String.hashCode, made positive). */
@@ -71,8 +73,9 @@ export function reconcile(cast: readonly Character[], agents: readonly AgentView
     const agent = byId.get(character.id);
     if (agent) {
       seen.add(character.id);
-      // Back before it reached the door: stop where it stands, so the renderer pauses it and
-      // it wanders on — still 'leaving', it would walk out and wait at the door forever.
+      // Back before it reached the door: stop where it stands — still 'leaving', it would walk
+      // out and wait at the door forever. Its place was forgotten on leaving, so on the next
+      // frame it claims a spot for its activity (or wanders if that kind is full).
       kept.push(
         character.state === 'leaving'
           ? { ...character, agent, state: 'idle', targetX: character.x, targetY: character.y, path: [] }
@@ -94,6 +97,7 @@ export function reconcile(cast: readonly Character[], agents: readonly AgentView
       path,
       spot: undefined,
       place: undefined,
+      arrivedAt: undefined,
     });
   }
 

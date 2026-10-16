@@ -8,12 +8,25 @@ import type { Session, SubAgent } from './types';
 
 export const MAX_VISIBLE_AGENTS = 24;
 
+/**
+ * A background agent (a session nested under its launcher — the only subagent with a
+ * `transcriptPath`) is named 'Agent' by sessionAsSubagent, since the tree already shows its title
+ * as the row's description. The office has only the name tag, which also picks the sprite, so it
+ * uses the title — sessionAsSubagent's `task`, which falls back to the id when none was captured.
+ */
+function nameOf(subagent: SubAgent): string {
+  if (!subagent.transcriptPath) {
+    return subagent.name;
+  }
+  return subagent.task !== subagent.id ? subagent.task : 'background agent';
+}
+
 function subagentViews(session: Session, subagent: SubAgent, parentId: string): AgentView[] {
   const self: AgentView = {
     id: subagent.id,
     kind: 'subagent',
     parentId,
-    name: subagent.name,
+    name: nameOf(subagent),
     model: subagent.model ?? session.model,
     projectName: session.projectName,
     brand: session.type,

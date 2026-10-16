@@ -1,6 +1,7 @@
 // src/test/officeSnapshot.test.ts
 import { describe, it, expect } from 'vitest';
 import { buildSnapshot, MAX_VISIBLE_AGENTS } from '../officeSnapshot';
+import { sessionAsSubagent } from '../sessionDedupe';
 import type { Session, SubAgent } from '../types';
 
 function subagent(over: Partial<SubAgent> = {}): SubAgent {
@@ -48,6 +49,22 @@ describe('buildSnapshot', () => {
     const { agents } = buildSnapshot([session({ subagents: [subagent()] })], new Map());
     const sub = agents.find((a) => a.kind === 'subagent');
     expect(sub).toMatchObject({ id: 'sub-1', name: 'debugger', parentId: 'sess-1', projectName: 'proj' });
+  });
+
+  it('names a background agent from its session title, else "background agent"', () => {
+    // sessionAsSubagent names every background agent 'Agent' for the tree (its title is the row's
+    // description there); in the office the name tag is all there is, and it picks the sprite.
+    const background = [
+      sessionAsSubagent(session({ id: 'bg-1', sessionTitle: 'Review for security', logFilePath: '/p/bg-1.jsonl' })),
+      sessionAsSubagent(session({ id: 'bg-2', sessionTitle: 'Update the changelog', logFilePath: '/p/bg-2.jsonl' })),
+      sessionAsSubagent(session({ id: 'bg-3', sessionTitle: '', logFilePath: '/p/bg-3.jsonl' })),
+    ];
+    const { agents } = buildSnapshot([session({ subagents: [...background, subagent()] })], new Map());
+    const nameOf = (id: string): string | undefined => agents.find((a) => a.id === id)?.name;
+    expect(nameOf('bg-1')).toBe('Review for security');
+    expect(nameOf('bg-2')).toBe('Update the changelog');
+    expect(nameOf('bg-3')).toBe('background agent');
+    expect(nameOf('sub-1')).toBe('debugger');
   });
 
   it('flattens nested grandchildren one level, parented to their own launcher', () => {

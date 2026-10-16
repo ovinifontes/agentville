@@ -4,6 +4,12 @@ import { detectForkedSkillLaunch } from './forkedSkillDetector';
 
 /** Detect subagent starts/completions from one log entry and mutate the running map. */
 export function detectSubagents(json: LogEntry, currentSubagents: Map<string, SubAgent>): void {
+  // Claude Code >= 2.1.300 appends `api-request-blob` entries: a replay of the API request, whose
+  // message carries the Agent launch's tool_result WITHOUT the toolUseResult ACK marker. Read as a
+  // normal turn it would mark every backgrounded subagent stopped the moment it launched.
+  if (json.type === 'api-request-blob') {
+    return;
+  }
   detectAntigravityCalls(json, currentSubagents);
   detectClaudeCalls(json, currentSubagents);
   detectSendMessageResume(json, currentSubagents);

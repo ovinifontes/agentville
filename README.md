@@ -16,20 +16,16 @@ sessions, subagents, models and live status — in one place inside VS Code.
 - **Active detection** — a session is marked active on a recent write, a reply it still owes, a long _thinking_ turn, or while any of its subagents — including a background agent it launched that runs in its own log file — are still working. `lsof` is also checked on macOS/Linux as a secondary signal (it rarely finds anything, since the log file's descriptor isn't held open between appends), and is skipped entirely on Windows.
 - **Startup delay** — waits ~10s on activation, showing a progress bar and loading state, so it doesn't compete with Claude Code for the log files while it boots.
 - **Global on/off toggle** — an eye icon in the view title. Persisted as an application-scoped setting, so disabling it stops monitoring across **every** window/instance.
+- **The office** — run **AgentVille: Open Office** (or click the game icon in the view title) to open a furnished pixel-art office in an editor tab. Every running session and subagent is a character: they enter and leave by the door as agents start and finish, wander the floor, and carry a name tag. A live speech bubble shows what each working agent is doing right now (`Editing logParser.ts`, `Running npm test`); clicking it opens a side panel with that agent's recent activity. Past 24 characters the rest collapse into a `+N waiting` chip. Art is CC0 (see [resources/ASSETS.md](resources/ASSETS.md)). Limits: wandering is decorative (no pathfinding yet, so characters may walk across furniture), Antigravity agents get no bubble because their logs carry no Claude-style tool calls, and the office shows the same sessions as the tree (current workspace, last hour).
 
 ## Roadmap
 
 > ⚠️ **Not built yet.** Everything below is planned, not shipped. What the extension does
-> today is exactly the list above — a tree view. This section exists so you know where the
-> project is going, not to describe features you can use.
+> today is the list above — the tree view and the office. This section exists so you know
+> where the project is going, not to describe features you can use.
 
-The name is the plan: turn the tree into a **living 2D pixel office**.
+The name is the plan: make the **living 2D pixel office** richer.
 
-- **The office** — a webview opened in an editor tab, rendering an open-floor pixel-art
-  office. Every running session and subagent is a character on the floor; they walk in when
-  an agent starts and leave when it finishes. A speech bubble follows each one showing what
-  it is doing right now (`Editing logParser.ts`, `Running npm test`), and clicking it opens
-  a side panel with that agent's most recent activity, live.
 - **Situated behaviour** — characters walk to the furniture that matches their work:
   the bookshelf when reading a file, a desk when editing, the printer when running a
   command, the coffee machine when idle.

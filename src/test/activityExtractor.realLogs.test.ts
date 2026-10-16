@@ -6,23 +6,30 @@ import { extractAction } from '../activityExtractor';
 
 const projectsDir = path.join(os.homedir(), '.claude', 'projects');
 
+/** The .jsonl files directly in a project dir; none for a plain file or an unreadable entry. */
+function transcriptsIn(dir: string): string[] {
+  try {
+    return fs
+      .readdirSync(dir)
+      .filter((file) => file.endsWith('.jsonl'))
+      .map((file) => path.join(dir, file));
+  } catch {
+    return []; // ENOTDIR, EACCES, a dangling link: skip it
+  }
+}
+
 function someTranscripts(limit: number): string[] {
-  if (!fs.existsSync(projectsDir)) {
-    return [];
+  let dirs: string[];
+  try {
+    dirs = fs.readdirSync(projectsDir);
+  } catch {
+    return []; // no ~/.claude/projects here (CI) or unreadable: the test skips
   }
   const found: string[] = [];
-  for (const dir of fs.readdirSync(projectsDir)) {
-    const full = path.join(projectsDir, dir);
-    if (!fs.statSync(full).isDirectory()) {
-      continue;
-    }
-    for (const file of fs.readdirSync(full)) {
-      if (file.endsWith('.jsonl')) {
-        found.push(path.join(full, file));
-      }
-      if (found.length >= limit) {
-        return found;
-      }
+  for (const dir of dirs) {
+    found.push(...transcriptsIn(path.join(projectsDir, dir)));
+    if (found.length >= limit) {
+      return found.slice(0, limit);
     }
   }
   return found;
@@ -48,7 +55,7 @@ describe('extractAction against real transcripts', () => {
         const result = extractAction(parsed);
         if (result) {
           rendered++;
-          expect(result).not.toMatch(/^tool_use/);
+          expect(result).not.toMatch(/^toolu_/);
           expect(result.length).toBeLessThan(80);
         }
       }

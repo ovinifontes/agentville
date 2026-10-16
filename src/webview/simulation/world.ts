@@ -15,6 +15,8 @@ export const WORLD_HEIGHT = MAP_TILES_Y * TILE_SIZE;
 
 // # wall   . floor   , rug   D desk   C chair   T meeting table
 // P plant  S sofa    K coffee counter  R printer/shelf   _ door
+// Chairs and the sofa are seats: walkable, so a character can sit (stand on them, facing the
+// furniture). Every other piece of furniture is solid.
 const OPEN_ROW = '#......................................#';
 
 export const OFFICE_MAP: readonly string[] = [
@@ -44,7 +46,7 @@ export const OFFICE_MAP: readonly string[] = [
   '########################################',
 ];
 
-const WALKABLE = new Set(['.', ',', '_']);
+const WALKABLE = new Set(['.', ',', '_', 'C', 'S']);
 
 export type TileKind = string;
 

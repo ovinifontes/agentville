@@ -1,10 +1,10 @@
-// Position stepping and target selection. Characters wander between reachable tiles,
-// following a grid path around furniture; with no path they step straight at the target.
-// Sub-project 2 replaces `pickTarget` with furniture-aware selection; a replacement must also
-// set `path` (via `findPath`), or characters fall back to the straight line.
+// Position stepping and target selection. Characters walk a grid path around furniture to
+// a spot that matches their activity (situated.ts); when every such spot is taken they wander
+// between reachable tiles. With no path they step straight at the target.
 
 import type { Character } from './population';
 import { findPath, reachableTiles } from './pathfinding';
+import { claimSpot, placeFor } from './situated';
 
 const SPEED_PX_PER_MS = 0.02;
 
@@ -37,8 +37,8 @@ export function step(character: Character, deltaMs: number): Character {
   };
 }
 
-/** Choose a new wander destination among the tiles reachable on foot. `random` is injected so tests stay deterministic. */
-export function pickTarget(character: Character, random: () => number): Character {
+/** Choose a wander destination among the tiles reachable on foot. */
+function wander(character: Character, random: () => number): Character {
   // Draw from the reachable set rather than guessing coordinates: the map is furnished, so
   // most of the grid is solid and rejection sampling would stall against desks.
   const tiles = reachableTiles(character.x, character.y);
@@ -48,4 +48,29 @@ export function pickTarget(character: Character, random: () => number): Characte
   const tile = tiles[Math.min(tiles.length - 1, Math.floor(random() * tiles.length))];
   const path = findPath(character, tile);
   return { ...character, targetX: tile.x, targetY: tile.y, path, state: 'walking' };
+}
+
+/**
+ * Send the character to a free spot for its current activity, else wander. `cast` holds the
+ * other characters' claims; `random` (wandering only) is injected so tests stay deterministic.
+ */
+export function pickTarget(character: Character, random: () => number, cast: readonly Character[] = []): Character {
+  const place = placeFor(character.agent.action);
+  const spot = claimSpot(character, place, cast);
+  if (!spot) {
+    return { ...wander(character, random), place, spot: undefined };
+  }
+  const path = findPath(character, spot);
+  return { ...character, targetX: spot.x, targetY: spot.y, path, state: 'walking', place, spot };
+}
+
+/**
+ * Called every frame: re-targets only when the activity now needs a different kind of place
+ * (or none was chosen yet); otherwise returns the same character, with no search. Leaving wins.
+ */
+export function followActivity(character: Character, random: () => number, cast: readonly Character[]): Character {
+  if (character.state === 'leaving' || placeFor(character.agent.action) === character.place) {
+    return character;
+  }
+  return pickTarget(character, random, cast);
 }

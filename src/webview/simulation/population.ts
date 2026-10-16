@@ -4,6 +4,7 @@
 
 import type { AgentView } from '../../officeTypes';
 import { findPath, type Point } from './pathfinding';
+import type { PlaceKind, Spot } from './situated';
 import { DOOR } from './world';
 
 export const SPRITE_VARIANTS = 4;
@@ -21,15 +22,24 @@ export interface Character {
   /** Remaining waypoints (tile centres) toward the target; empty when walking straight. */
   path: Point[];
   agent: AgentView;
+  /** Spot claimed for the current activity; none while wandering (its kind was full) or leaving. */
+  spot?: Spot;
+  /** Kind of place last targeted for; a different kind for the current activity means re-target. */
+  place?: PlaceKind;
+}
+
+/** Non-negative string hash, stable across runs (Java's String.hashCode, made positive). */
+export function stableHash(text: string): number {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = (hash * 31 + text.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
 }
 
 /** Stable per-name sprite choice, so the same agent is always the same person. */
 export function spriteVariantFor(name: string): number {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = (hash * 31 + name.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash) % SPRITE_VARIANTS;
+  return stableHash(name) % SPRITE_VARIANTS;
 }
 
 function spawn(agent: AgentView): Character {
@@ -73,9 +83,18 @@ export function reconcile(cast: readonly Character[], agents: readonly AgentView
     if (character.state === 'leaving' && hasReachedDoor(character)) {
       continue; // walked out — drop it
     }
-    // Route once, when it starts leaving; reconcile runs every frame.
+    // Route once, when it starts leaving; reconcile runs every frame. Its spot is freed for
+    // others, and forgetting the place makes it claim a new spot if its agent comes back.
     const path = character.state === 'leaving' ? character.path : findPath(character, DOOR);
-    kept.push({ ...character, state: 'leaving', targetX: DOOR.x, targetY: DOOR.y, path });
+    kept.push({
+      ...character,
+      state: 'leaving',
+      targetX: DOOR.x,
+      targetY: DOOR.y,
+      path,
+      spot: undefined,
+      place: undefined,
+    });
   }
 
   const spawned = agents.filter((agent) => !seen.has(agent.id)).map(spawn);

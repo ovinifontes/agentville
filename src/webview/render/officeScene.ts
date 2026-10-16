@@ -10,7 +10,7 @@
 import Phaser from 'phaser';
 import type { AgentView } from '../../officeTypes';
 import { reconcile, SPRITE_VARIANTS, type Character } from '../simulation/population';
-import { pickTarget, step } from '../simulation/movement';
+import { followActivity, pickTarget, step } from '../simulation/movement';
 import { OFFICE_MAP, TILE_SIZE, WORLD_HEIGHT, WORLD_WIDTH } from '../simulation/world';
 
 const IDLE_PAUSE_MS = 1200;
@@ -77,12 +77,28 @@ function spriteSet(character: Character): number {
   return character.sprite + (character.agent.kind === 'subagent' ? SPRITE_VARIANTS : 0);
 }
 
+/** The standing pose: first walk frame of the character's set in `direction`. */
+function standingFrame(character: Character, direction: number): number {
+  return (spriteSet(character) * DIRECTIONS + direction) * WALK_FRAMES;
+}
+
 /** Direction faced while walking: the dominant axis of the remaining movement. */
 function facing(dx: number, dy: number): number {
   if (Math.abs(dx) > Math.abs(dy)) {
     return dx < 0 ? LEFT : RIGHT;
   }
   return dy < 0 ? UP : DOWN;
+}
+
+/** Stand at a claimed spot facing its furniture; elsewhere, on the first frame of the direction last walked. */
+function stand(sprite: Phaser.GameObjects.Sprite, character: Character): void {
+  if (sprite.anims.isPlaying) {
+    sprite.anims.pause(sprite.anims.currentAnim?.frames[0]);
+  }
+  if (character.spot) {
+    // Only called on arrival at the target, and a claimed spot is always the target.
+    sprite.setFrame(standingFrame(character, facing(character.spot.face.x, character.spot.face.y)));
+  }
 }
 
 export class OfficeScene extends Phaser.Scene {
@@ -208,7 +224,11 @@ export class OfficeScene extends Phaser.Scene {
     if (this.pending.length > 0 || this.cast.length > 0) {
       this.cast = reconcile(this.cast, this.pending);
     }
-    this.cast = this.cast.map((character) => this.advance(character, time, delta));
+    // Advance a copy in place, so a spot claimed earlier this frame is already taken for the rest.
+    this.cast = [...this.cast];
+    this.cast.forEach((character, index) => {
+      this.cast[index] = this.advance(character, time, delta);
+    });
     this.syncSprites();
     this.emitPositions();
   }
@@ -223,11 +243,23 @@ export class OfficeScene extends Phaser.Scene {
     this.game.loop.sleep();
   }
 
-  /** Walk; on arrival stand for IDLE_PAUSE_MS, then wander on. Leaving walks out without pausing. */
+  /**
+   * Walk; head for a new spot when the activity's kind of place changes; hold a claimed spot.
+   * Without a spot (its kind is full), stand for IDLE_PAUSE_MS on arrival, then try again or
+   * wander on. Leaving walks out without pausing. Searches only on a kind change or arrival.
+   */
   private advance(character: Character, time: number, delta: number): Character {
-    const moved = step(character, delta);
+    const stepped = step(character, delta);
+    const moved = followActivity(stepped, Math.random, this.cast);
+    if (moved !== stepped) {
+      this.pauseUntil.delete(moved.id); // re-targeted: a pending wander pause no longer applies
+      return moved;
+    }
     if (moved.state === 'leaving' || moved.x !== moved.targetX || moved.y !== moved.targetY) {
       return moved;
+    }
+    if (moved.spot) {
+      return moved.state === 'idle' ? moved : { ...moved, state: 'idle' };
     }
     const pausedUntil = this.pauseUntil.get(moved.id);
     if (pausedUntil === undefined) {
@@ -238,7 +270,7 @@ export class OfficeScene extends Phaser.Scene {
       return moved;
     }
     this.pauseUntil.delete(moved.id);
-    return pickTarget(moved, Math.random);
+    return pickTarget(moved, Math.random, this.cast);
   }
 
   private syncSprites(): void {
@@ -261,9 +293,10 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Kind and brand never change for an id, so scale and tint are set once. */
   private addSprite(character: Character): Phaser.GameObjects.Sprite {
-    const standingDown = (spriteSet(character) * DIRECTIONS + DOWN) * WALK_FRAMES;
     // Feet on the character's point: the 16 px body sits bottom-aligned in the 24 px frame.
-    const sprite = this.add.sprite(character.x, character.y, 'characters', standingDown).setOrigin(0.5, 1);
+    const sprite = this.add
+      .sprite(character.x, character.y, 'characters', standingFrame(character, DOWN))
+      .setOrigin(0.5, 1);
     if (character.agent.kind === 'subagent') {
       sprite.setScale(SUBAGENT_SCALE);
     }
@@ -274,15 +307,13 @@ export class OfficeScene extends Phaser.Scene {
     return sprite;
   }
 
-  /** Walk toward the next waypoint (else the target), or stand on the first frame of the direction last walked. */
+  /** Walk toward the next waypoint (else the target), or stand. */
   private animate(sprite: Phaser.GameObjects.Sprite, character: Character): void {
     const waypoint = character.path.at(0);
     const dx = (waypoint?.x ?? character.targetX) - character.x;
     const dy = (waypoint?.y ?? character.targetY) - character.y;
     if (dx === 0 && dy === 0 && character.path.length === 0) {
-      if (sprite.anims.isPlaying) {
-        sprite.anims.pause(sprite.anims.currentAnim?.frames[0]);
-      }
+      stand(sprite, character);
       return;
     }
     sprite.play(WALK_KEYS[spriteSet(character) * DIRECTIONS + facing(dx, dy)], true);

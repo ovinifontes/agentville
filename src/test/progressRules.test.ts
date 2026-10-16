@@ -18,10 +18,10 @@ const MIN = 60_000;
 // 2026-03-10 12:00 UTC; tz offset 0 unless stated.
 const T0 = Date.UTC(2026, 2, 10, 12, 0, 0);
 
-export function sub(over: Partial<SubAgent> = {}): SubAgent {
+function sub(over: Partial<SubAgent> = {}): SubAgent {
   return { id: 'a1', name: 'Explorer ', task: 't', status: 'working', ...over };
 }
-export function sess(subagents: SubAgent[] = [], over: Partial<Session> = {}): Session {
+function sess(subagents: SubAgent[] = [], over: Partial<Session> = {}): Session {
   return {
     id: 's1',
     projectHash: 'h',
@@ -38,8 +38,11 @@ export function sess(subagents: SubAgent[] = [], over: Partial<Session> = {}): S
 }
 const clock = (now: number, tz = 0) => ({ now, tzOffsetMinutes: tz });
 
+// A state that already ticked once (empty office), so later stopped runs are genuinely new.
+const warm = (): ProgressState => applyTick(freshState(), [], clock(T0 - MIN)).state;
+
 function run(sessions: Session[], times: number[], opts: { from?: ProgressState; tz?: number } = {}) {
-  return times.reduce((st, t) => applyTick(st, sessions, clock(t, opts.tz)).state, opts.from ?? freshState());
+  return times.reduce((st, t) => applyTick(st, sessions, clock(t, opts.tz)).state, opts.from ?? warm());
 }
 
 describe('levels', () => {
@@ -65,7 +68,7 @@ describe('decoration and office xp', () => {
 describe('applyTick accrual', () => {
   const working = [sess([], { status: 'working' })];
   it('first tick credits nothing', () => {
-    expect(run(working, [T0]).types).toEqual({});
+    expect(run(working, [T0], { from: freshState() }).types).toEqual({});
   });
   it('credits elapsed time to the agent type on the second tick', () => {
     const st = run(working, [T0, T0 + 30_000]);
@@ -139,12 +142,51 @@ describe('completed runs', () => {
   });
 });
 
+describe('first tick seeding (R3)', () => {
+  const done = (id: string, name = 'explorer') => sub({ id, name, status: 'stopped' });
+  it('records history as counted without XP, runs or achievements', () => {
+    const r = applyTick(freshState(), [sess([done('a'), done('b', 'x'), done('c', 'y')])], clock(T0));
+    expect(officeXp(r.state)).toBe(0);
+    expect(r.state.totalRuns).toBe(0);
+    expect(r.unlocked).toEqual([]);
+    expect(r.state.countedIds).toEqual(['a', 'b', 'c']);
+    const next = applyTick(r.state, [sess([done('a'), done('n')])], clock(T0 + MIN));
+    expect(next.state.types.explorer.runs).toBe(1);
+    expect(officeXp(next.state)).toBe(10);
+    expect(next.unlocked).toEqual(['first-hire']);
+  });
+  it('a counted run resumed and completed again earns once', () => {
+    const states = [done('a'), sub({ id: 'a' }), done('a'), sub({ id: 'a' }), done('a')];
+    let st = run([sess([done('a')])], [T0], { from: freshState() });
+    for (const [i, a] of states.entries()) st = applyTick(st, [sess([a])], clock(T0 + (i + 1) * MIN)).state;
+    expect(st.totalRuns).toBe(0);
+    let st2 = warm();
+    for (const [i, a] of states.entries()) st2 = applyTick(st2, [sess([a])], clock(T0 + (i + 1) * MIN)).state;
+    expect(st2.totalRuns).toBe(1);
+  });
+});
+
+describe('purity and nesting', () => {
+  it('does not mutate its input state', () => {
+    const st = run([sess([sub({ status: 'stopped' })], { status: 'working' })], [T0, T0 + MIN]);
+    const before = structuredClone(st);
+    applyTick(st, [sess([sub({ id: 'z', status: 'stopped' })], { status: 'working' })], clock(T0 + 2 * MIN));
+    expect(st).toEqual(before);
+  });
+  it('types a nested background agent grandchild as background agent', () => {
+    const tree = sess([sub({ children: [sub({ id: 'bg', name: 'Agent', transcriptPath: '/t' })] })]);
+    const st = run([tree], [T0, T0 + MIN]);
+    expect(Object.keys(st.types)).toContain('background agent');
+    expect(Object.keys(st.types)).not.toContain('agent');
+  });
+});
+
 describe('day tracking', () => {
   const working = [sess([], { status: 'working' })];
   it('resets the day total at local midnight (offset 180 = UTC-3)', () => {
     // 02:59:30 UTC = 23:59:30 local the day before; 03:00:30 UTC = 00:00:30 local.
     const a = Date.UTC(2026, 2, 10, 2, 59, 30);
-    const before = run(working, [a - 30_000, a], { tz: 180 });
+    const before = run(working, [a - 30_000, a], { from: freshState(), tz: 180 });
     expect(before.dayKey).toBe('2026-03-09');
     expect(before.dayMs).toBe(30_000);
     const after = applyTick(before, working, clock(a + 60_000, 180)).state;

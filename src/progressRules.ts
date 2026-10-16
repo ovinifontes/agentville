@@ -155,7 +155,14 @@ function accrue(state: ProgressState, flat: Flat[], now: number): ProgressState 
   return { ...state, types, dayMs: state.dayMs + credit * earning.length };
 }
 
+/** First tick (fresh install or reset): history is only recorded as counted, never rewarded. */
+function seedRuns(state: ProgressState, stopped: Flat[]): ProgressState {
+  const ids = [...new Set(stopped.map((f) => f.id))];
+  return { ...state, countedIds: ids.slice(-MAX_COUNTED_IDS) };
+}
+
 function creditRuns(state: ProgressState, stopped: Flat[]): ProgressState {
+  if (state.lastTickAt === null) return seedRuns(state, stopped);
   const seen = new Set(state.countedIds);
   const fresh = stopped.filter((f, i) => !seen.has(f.id) && stopped.findIndex((g) => g.id === f.id) === i);
   const types = fresh.reduce((acc, f) => addStats(acc, f.type, { workMs: 0, runs: 1 }), state.types);

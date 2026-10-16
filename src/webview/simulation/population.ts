@@ -100,6 +100,7 @@ export function reconcile(cast: readonly Character[], agents: readonly AgentView
       spot: undefined,
       place: undefined,
       arrivedAt: undefined,
+      pending: undefined,
     });
   }
 

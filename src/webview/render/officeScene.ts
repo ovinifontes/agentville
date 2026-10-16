@@ -44,7 +44,9 @@ const DOWN = 0;
 const LEFT = 1;
 const RIGHT = 2;
 const UP = 3;
-const WALK_FRAME_RATE = 6;
+// Matched to the walking speed (movement.ts, 0.035 px/ms): about 3.5 px per walk frame, the stride
+// the cycle was tuned to at 0.02 px/ms and 6 fps. Change both together, or the feet slide.
+const WALK_FRAME_RATE = 10;
 
 /** One walk animation per set and direction, indexed by set * DIRECTIONS + direction. */
 const WALK_KEYS: readonly string[] = Array.from(

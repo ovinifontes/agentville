@@ -334,6 +334,16 @@ describe('re-targeting', () => {
     }
   });
 
+  it('restarts the settle when the wanted kind changes again before it settles', () => {
+    // Reading from 7000, then Delegating from 9000: the meeting needs its own 3 s, until 12000.
+    const delegating = play(seatedEditor(), [
+      [7000, 'Reading x.ts'],
+      [9000, 'Delegating to explorer'],
+    ]);
+    expect(play(delegating, [[9000 + PLACE_SETTLE_MS - 1, 'Delegating to explorer']]).spot?.kind).toBe('desk');
+    expect(play(delegating, [[9000 + PLACE_SETTLE_MS, 'Delegating to explorer']]).spot?.kind).toBe('meeting');
+  });
+
   it('places a newcomer or a returning character at once, and leaves at once mid-settle', () => {
     expect(followActivity(newcomer('beta', 'Reading x.ts'), at(0, [])).spot?.kind).toBe('shelf');
     const settling = play(seatedEditor(), [[9000, 'Reading x.ts']]);
@@ -341,7 +351,7 @@ describe('re-targeting', () => {
     expect(leaving.state).toBe('leaving');
     expect(followActivity(leaving, at(20_000, [leaving]))).toBe(leaving);
     const back = reconcile([leaving], [settling.agent])[0];
-    expect(followActivity(back, at(9001, [back])).spot?.kind).toBe('shelf');
+    expect(followActivity(back, at(20_001, [back])).spot?.kind).toBe('shelf');
   });
 
   it('does not re-search for a walking wanderer whose kind is still full', () => {

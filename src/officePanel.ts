@@ -11,6 +11,84 @@ import type { SessionTreeDataProvider } from './sessionTreeDataProvider';
 import type { ToExtension, ToWebview } from './officeTypes';
 import type { Session } from './types';
 
+// Overlay styles use VS Code theme variables so the office follows the active theme.
+const OFFICE_CSS = `
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--vscode-editor-background); }
+  /* flow-root: Phaser centres the canvas with margins, which would otherwise collapse through
+     the parent and shift the whole overlay coordinate space. */
+  #office { position: relative; display: flow-root; width: 100%; height: 100%; }
+  .bubble {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 3;
+    max-width: 220px;
+    padding: 2px 8px;
+    font: 11px var(--vscode-font-family);
+    color: var(--vscode-editor-foreground);
+    background: var(--vscode-editorWidget-background);
+    border: 1px solid var(--vscode-editorWidget-border);
+    border-radius: 10px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .name-tag {
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    padding: 0 4px;
+    border-radius: 4px;
+    font: 10px var(--vscode-font-family);
+    color: var(--vscode-editor-foreground);
+    background: color-mix(in srgb, var(--vscode-editor-background) 78%, transparent);
+    white-space: nowrap;
+  }
+  .feed {
+    position: absolute;
+    z-index: 10;
+    box-sizing: border-box;
+    top: 0;
+    right: 0;
+    width: 380px;
+    height: 100%;
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--vscode-sideBar-background);
+    border-left: 1px solid var(--vscode-editorWidget-border);
+    color: var(--vscode-editor-foreground);
+    font: 12px var(--vscode-font-family);
+  }
+  .feed-list pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 4px 0 12px;
+  }
+  .feed-meta {
+    opacity: 0.65;
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+  .overflow {
+    position: absolute;
+    z-index: 5;
+    left: 8px;
+    bottom: 8px;
+    padding: 2px 8px;
+    border-radius: 8px;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    font: 11px var(--vscode-font-family);
+  }
+  .hidden {
+    display: none;
+  }
+  #office canvas {
+    display: block;
+  }
+`;
+
 export class OfficePanel {
   private static current: OfficePanel | undefined;
 
@@ -176,9 +254,7 @@ export class OfficePanel {
 <meta http-equiv="Content-Security-Policy" content="${csp}" />
 <title>AgentVille</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--vscode-editor-background); }
-  #office { position: relative; width: 100%; height: 100%; }
-</style>
+${OFFICE_CSS}</style>
 </head>
 <body>
 <div id="office" data-assets="${assets.toString()}"></div>

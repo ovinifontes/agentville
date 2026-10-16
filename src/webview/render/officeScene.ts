@@ -165,6 +165,11 @@ export class OfficeScene extends Phaser.Scene {
     this.canvasTop = canvas.top - parent.top;
   }
 
+  /** Current integer zoom of the 640x384 world; overlays scale their offsets with it. */
+  get zoom(): number {
+    return this.scale.zoom;
+  }
+
   setAgents(agents: readonly AgentView[]): void {
     this.pending = [...agents];
   }

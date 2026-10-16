@@ -79,4 +79,24 @@ describe('pathfinding', () => {
     expect(reconcile([leaving], [])[0].path).toBe(leaving.path);
     expect(reconcile([leaving], [agent])[0].path).toEqual([]);
   });
+
+  it('reaches the door after turning back mid-tile', () => {
+    const start = { x: DOOR.x + 2 * TILE_SIZE, y: DOOR.y };
+    let walker: Character = {
+      ...atDoor(),
+      ...start,
+      targetX: start.x + TILE_SIZE,
+      targetY: start.y,
+      path: [{ x: start.x + TILE_SIZE, y: start.y }],
+      state: 'walking',
+    };
+    for (let i = 0; i < 3; i++) {
+      walker = step(walker, 16.7);
+    }
+    let cast = reconcile([walker], []);
+    for (let i = 0; i < 1000 && cast.length > 0; i++) {
+      cast = reconcile(cast, []).map((c) => step(c, 16.7));
+    }
+    expect(cast).toEqual([]);
+  });
 });

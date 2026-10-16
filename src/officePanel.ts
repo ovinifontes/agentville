@@ -5,7 +5,7 @@
 import * as vscode from 'vscode';
 import { buildSnapshot } from './officeSnapshot';
 import { RecentEntryStore } from './recentEntries';
-import { SubagentTranscriptReader, subagentTranscriptPath } from './subagentTranscriptReader';
+import { SubagentTranscriptReader, workingTranscripts } from './subagentTranscriptReader';
 import { logDebug } from './logger';
 import type { SessionTreeDataProvider } from './sessionTreeDataProvider';
 import type { ToExtension, ToWebview } from './officeTypes';
@@ -200,18 +200,17 @@ export class OfficePanel {
   }
 
   private refreshActions(sessions: readonly Session[]): void {
-    for (const session of sessions) {
-      if (session.status !== 'working') {
-        continue;
-      }
-      this.readTranscript(session.id, session.logFilePath);
-      for (const subagent of session.subagents) {
-        // Only working ones: a finished transcript cannot produce a new action, and reading
-        // every completed one would multiply I/O by the session's whole history.
-        if (subagent.status === 'working') {
-          const agentId = subagent.agentId ?? subagent.id;
-          this.readTranscript(subagent.id, subagentTranscriptPath(session.logFilePath, agentId));
-        }
+    // Only working agents are read: a finished transcript cannot produce a new action, and
+    // reading every completed one would multiply I/O by the session's whole history.
+    const working = new Set<string>();
+    for (const { id, path } of sessions.flatMap(workingTranscripts)) {
+      working.add(id);
+      this.readTranscript(id, path);
+    }
+    // Nor do they keep one: an agent that resumes must not show the action it stopped on.
+    for (const id of this.actions.keys()) {
+      if (!working.has(id)) {
+        this.actions.delete(id);
       }
     }
   }

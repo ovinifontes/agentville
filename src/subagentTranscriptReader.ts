@@ -14,6 +14,7 @@ import { extractAction } from './activityExtractor';
 import { splitCompleteLines } from './completeLines';
 import { logDebug } from './logger';
 import type { FeedEntry } from './officeTypes';
+import type { Session } from './types';
 
 export interface SubagentRead {
   action?: string;
@@ -25,6 +26,29 @@ export function subagentTranscriptPath(sessionLogPath: string, agentId: string):
   const dir = path.dirname(sessionLogPath);
   const sessionId = path.basename(sessionLogPath, '.jsonl');
   return path.join(dir, sessionId, 'subagents', `agent-${agentId}.jsonl`);
+}
+
+/**
+ * The transcripts a refresh should read for one session: every WORKING agent in it — the
+ * session itself, its subagents and their grandchildren — each gated on its own status, never
+ * the session's. A session reads 'stopped' after 30 min without writes while a long subagent it
+ * launched is still running (see subagentGrouping.ts), so gating the walk on the session would
+ * freeze exactly the agents doing the work. Antigravity yields nothing: its log shapes carry no
+ * Claude-style tool_use (activityExtractor.ts), so reading them would cost I/O for no action.
+ */
+export function workingTranscripts(session: Session): Array<{ id: string; path: string }> {
+  if (session.type === 'antigravity') {
+    return [];
+  }
+  const own = session.status === 'working' ? [{ id: session.id, path: session.logFilePath }] : [];
+  const subagents = session.subagents
+    .flatMap((subagent) => [subagent, ...(subagent.children ?? [])])
+    .filter((subagent) => subagent.status === 'working')
+    .map((subagent) => ({
+      id: subagent.id,
+      path: subagentTranscriptPath(session.logFilePath, subagent.agentId ?? subagent.id),
+    }));
+  return [...own, ...subagents];
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

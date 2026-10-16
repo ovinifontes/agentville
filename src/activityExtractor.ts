@@ -5,6 +5,11 @@
 // The transcript format is undocumented and changes between Claude Code releases, so every
 // access here is defensive: an unrecognised shape yields `undefined` (keep the previous
 // action) or the generic 'Working', never an exception and never a raw tool id.
+//
+// Antigravity is an explicit no-op: its entries carry no `message` and no Claude-style
+// tool_use blocks (its calls are a different shape — subagentDetector.ts's
+// detectAntigravityCalls), so every one fails isAssistantTurn and yields `undefined`. The
+// office does not even read those transcripts (subagentTranscriptReader.ts's workingTranscripts).
 
 const MAX_COMMAND_CHARS = 30;
 

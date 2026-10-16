@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { SubagentTranscriptReader, subagentTranscriptPath } from '../subagentTranscriptReader';
+import { SubagentTranscriptReader, subagentTranscriptPath, workingTranscripts } from '../subagentTranscriptReader';
+import type { Session, SubAgent } from '../types';
 
 const tempDir = path.join(os.tmpdir(), 'agentville-subagent-test');
 const filePath = path.join(tempDir, 'agent-abc.jsonl');
@@ -19,6 +20,50 @@ describe('subagentTranscriptPath', () => {
   it('resolves the subagents directory next to the session transcript', () => {
     const result = subagentTranscriptPath('/logs/proj/session-1.jsonl', 'abc');
     expect(result).toBe(path.join('/logs/proj', 'session-1', 'subagents', 'agent-abc.jsonl'));
+  });
+});
+
+describe('workingTranscripts', () => {
+  const logFilePath = '/logs/proj/s1.jsonl';
+  const sub = (id: string, status: SubAgent['status'], over: Partial<SubAgent> = {}): SubAgent => ({
+    id,
+    name: id,
+    task: 't',
+    status,
+    ...over,
+  });
+  const session = (over: Partial<Session>): Session => ({
+    id: 's1',
+    projectHash: 'h',
+    projectPath: '/p',
+    projectName: 'p',
+    gitBranch: 'main',
+    status: 'working',
+    lastInteractionTime: 0,
+    subagents: [],
+    logFilePath,
+    type: 'claude-code',
+    ...over,
+  });
+
+  it('reads working subagents and grandchildren even while the session reads stopped', () => {
+    const subagents = [
+      sub('a', 'working', { agentId: 'raw-a', children: [sub('c', 'working'), sub('d', 'stopped')] }),
+      sub('b', 'stopped'),
+    ];
+    expect(workingTranscripts(session({ status: 'stopped', subagents }))).toEqual([
+      { id: 'a', path: subagentTranscriptPath(logFilePath, 'raw-a') },
+      { id: 'c', path: subagentTranscriptPath(logFilePath, 'c') },
+    ]);
+  });
+
+  it("reads the session's own transcript only while it is working", () => {
+    expect(workingTranscripts(session({}))).toEqual([{ id: 's1', path: logFilePath }]);
+    expect(workingTranscripts(session({ status: 'stopped' }))).toEqual([]);
+  });
+
+  it('reads nothing for Antigravity, whose logs carry no Claude-style tool_use', () => {
+    expect(workingTranscripts(session({ type: 'antigravity', subagents: [sub('a', 'working')] }))).toEqual([]);
   });
 });
 

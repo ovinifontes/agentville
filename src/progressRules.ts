@@ -110,9 +110,10 @@ interface Flat {
   session: string; // Top-level session it belongs to
 }
 
+/** Ruling R9: the launch's agent type (its `subagent_type`, else the sidecar's), else the display name. */
 function typeOfSub(sub: SubAgent): string {
   if (sub.transcriptPath) return BACKGROUND_TYPE;
-  return sub.name.trim().toLowerCase() || 'agent';
+  return (sub.agentType?.trim() || sub.name.trim()).toLowerCase() || 'agent';
 }
 
 function flattenSub(sub: SubAgent, session: string): Flat[] {

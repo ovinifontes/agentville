@@ -103,6 +103,19 @@ describe('applyTick accrual', () => {
     const st = run(tree, [T0, T0 + MIN]);
     expect(Object.keys(st.types).sort()).toEqual(['background agent', 'explorer', 'reviewer', 'session']);
   });
+  it('prefers the agent type (lowercased) over the per-launch name, falling back to the name (R9)', () => {
+    const tree = [
+      sess([
+        sub({ id: 'a', name: 'fix-auth-bug', agentType: ' Explore ' }),
+        sub({ id: 'b', name: 'fix-login-bug', agentType: 'explore' }),
+        sub({ id: 'c', name: 'Code-Reviewer', agentType: '' }),
+        sub({ id: 'd', name: 'Agent', agentType: 'Plan', transcriptPath: '/t' }),
+      ]),
+    ];
+    const st = run(tree, [T0, T0 + MIN]);
+    expect(Object.keys(st.types).sort()).toEqual(['background agent', 'code-reviewer', 'explore']);
+    expect(st.types.explore.workMs).toBe(2 * MIN);
+  });
   it('tolerates a type named __proto__', () => {
     const st = run([sess([sub({ name: '__proto__' })])], [T0, T0 + MIN]);
     expect(Object.hasOwn(st.types, '__proto__')).toBe(true);

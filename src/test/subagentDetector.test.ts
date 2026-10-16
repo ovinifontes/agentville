@@ -172,6 +172,40 @@ describe('detectSubagents — SendMessage resume', () => {
   });
 });
 
+describe('detectSubagents — agent type (ruling R9)', () => {
+  // `subagent_type` isn't part of LogEntry's typed `input` shape; the detector reads it as unknown.
+  function launch(id: string, input: Record<string, unknown>): LogEntry {
+    return { type: 'assistant', message: { content: [{ type: 'tool_use', id, name: 'Agent', input }] } };
+  }
+
+  it("records the Agent tool's subagent_type, and none when the launch has none", () => {
+    const subagents = new Map<string, SubAgent>();
+    detectSubagents(launch('toolu_a', { name: 'fix-auth-bug', subagent_type: 'Explore', description: 'd' }), subagents);
+    detectSubagents(launch('toolu_b', { description: 'd' }), subagents);
+    expect(subagents.get('toolu_a')).toMatchObject({ name: 'fix-auth-bug', agentType: 'Explore' });
+    expect(subagents.get('toolu_b')?.agentType).toBeUndefined();
+  });
+
+  it('records it for a standalone Agent tool_use entry too', () => {
+    const subagents = new Map<string, SubAgent>();
+    const entry = { type: 'tool_use', name: 'Agent', id: 'toolu_s', input: { subagent_type: 'Plan' } };
+    detectSubagents(entry as unknown as LogEntry, subagents);
+    expect(subagents.get('toolu_s')?.agentType).toBe('Plan');
+  });
+
+  it('keeps the type across a SendMessage resume re-key', () => {
+    const subagents = new Map<string, SubAgent>();
+    detectSubagents(launch('toolu_a', { name: 'worker', subagent_type: 'Explore' }), subagents);
+    const resume = {
+      type: 'assistant',
+      message: { content: [{ type: 'tool_use', id: 'toolu_r', name: 'SendMessage', input: { to: 'worker' } }] },
+    };
+    detectSubagents(resume as unknown as LogEntry, subagents);
+    expect(subagents.has('toolu_a')).toBe(false);
+    expect(subagents.get('toolu_r')?.agentType).toBe('Explore');
+  });
+});
+
 /**
  * Since Claude Code 2.1.218 (observed on 2.1.222), a skill invoked with `context: fork`
  * (e.g. `/code-review`) runs as a backgrounded subagent, but its launch is a `type: "system"`,

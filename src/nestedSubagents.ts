@@ -93,6 +93,7 @@ function toChildSubAgent(meta: SidecarMetadata): SubAgent {
     id: meta.agentId ?? meta.toolUseId ?? Math.random().toString(),
     agentId: meta.agentId,
     name: meta.agentType ?? 'Agent',
+    agentType: meta.agentType,
     task: meta.description ?? 'Delegate task',
     status: computeChildStatus(meta),
     model: meta.model,

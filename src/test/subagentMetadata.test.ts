@@ -65,6 +65,18 @@ describe('enrichSubagentMetadata', () => {
     expect(sub.model).toBe('haiku');
   });
 
+  it("fills the agent type from the sidecar only when the launch didn't set one (ruling R9)", () => {
+    writeSidecar(baseDirName, 'a1', { agentType: 'general-purpose', toolUseId: 'toolu_01ABC123', model: 'haiku' });
+    writeSidecar(baseDirName, 'a2', { agentType: 'general-purpose', toolUseId: 'toolu_typed', model: 'haiku' });
+    const untyped = makeSubagent({ name: 'fix-auth-bug' });
+    const typed = makeSubagent({ id: 'toolu_typed', name: 'fix-auth-bug', agentType: 'Explore' });
+
+    enrichSubagentMetadata(makeSession({ subagents: [untyped, typed] }));
+
+    expect(untyped.agentType).toBe('general-purpose');
+    expect(typed.agentType).toBe('Explore');
+  });
+
   it('leaves a subagent untouched when no sidecar exists', () => {
     const sub = makeSubagent();
     const session = makeSession({ subagents: [sub] });

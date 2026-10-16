@@ -156,6 +156,7 @@ function registerCommands(context: vscode.ExtensionContext, sources: OfficeSourc
       if (choice === 'Reset') {
         logDebug('command(): reset office progress');
         progress.reset();
+        provider.refresh(); // a fresh snapshot, so the office's level tags drop at once
       }
     }),
   );

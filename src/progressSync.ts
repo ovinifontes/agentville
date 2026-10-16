@@ -41,8 +41,8 @@ export type DocRead = ProgressDoc | 'missing' | 'invalid' | 'newer' | 'error';
 
 type FileRead = { kind: 'doc'; doc: ProgressDoc; text: string } | { kind: Exclude<DocRead, ProgressDoc> };
 
-export function emptyDoc(): ProgressDoc {
-  return { generation: 0, state: freshState() };
+export function emptyDoc(generation = 0): ProgressDoc {
+  return { generation, state: freshState() };
 }
 
 function parseJson(text: string): unknown {
@@ -69,6 +69,7 @@ function classify(text: string): FileRead {
   }
   // Checked before migrate, which turns any other version into a fresh state.
   if (state.version > SCHEMA_VERSION) return { kind: 'newer' };
+  // ponytail: older versions read as invalid (quarantined); on the next SCHEMA_VERSION bump route them to migrate.
   if (state.version !== SCHEMA_VERSION) return { kind: 'invalid' };
   return { kind: 'doc', doc: { generation: raw.generation, state: migrate(state) }, text };
 }
@@ -173,8 +174,9 @@ function quarantine(file: string, now: number): boolean {
 export function loadForHolder(file: string, now: number): ProgressDoc | null {
   const read = readDoc(file);
   if (typeof read === 'object') return read;
-  if (read === 'missing') return emptyDoc();
-  return read === 'invalid' && quarantine(file, now) ? emptyDoc() : null;
+  // A fresh start outranks any older generation, so followers that saw a reset still adopt it.
+  if (read === 'missing') return emptyDoc(now);
+  return read === 'invalid' && quarantine(file, now) ? emptyDoc(now) : null;
 }
 
 /**
@@ -215,14 +217,25 @@ export function cleanStaleTemps(dir: string, now: number): void {
   }
 }
 
+function writeFlushed(file: string, text: string): void {
+  const fd = fs.openSync(file, 'w');
+  try {
+    fs.writeFileSync(fd, text);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 /**
  * Write through a temp file and a rename, so readers never see a partial file. The rename is
- * retried once (Windows can refuse it while another process reads the target). Never throws.
+ * retried once (Windows can refuse it while another process reads the target). The temp file is
+ * flushed before the rename, so a power loss cannot leave an empty file behind. Never throws.
  */
 export function writeAtomic(file: string, text: string, tag: string): boolean {
   const temp = `${file}.${tag}.tmp`;
   try {
-    fs.writeFileSync(temp, text);
+    writeFlushed(temp, text);
     try {
       fs.renameSync(temp, file);
     } catch (error) {

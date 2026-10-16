@@ -20,7 +20,8 @@ export class ToastLayer {
   }
 
   show(achievements: readonly AchievementView[], toastIds: readonly string[]): void {
-    for (const id of this.seen) if (!toastIds.includes(id)) this.seen.delete(id);
+    // Forget an id only once it is locked again (a reset): a follower may still see its acked toast on disk.
+    for (const id of this.seen) if (!achievements.find((a) => a.id === id)?.unlockedAt) this.seen.delete(id);
     const fresh = toastIds.filter((id) => !this.seen.has(id));
     for (const id of fresh) {
       this.seen.add(id);

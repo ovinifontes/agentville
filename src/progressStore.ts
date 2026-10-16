@@ -188,6 +188,7 @@ export class ProgressStore implements vscode.Disposable {
     if (signature !== null && signature === this.followedSignature) return;
     this.followedSignature = signature;
     const onDisk = readDoc(this.docFile);
+    if (onDisk === 'error') this.followedSignature = null; // retry a transient read failure next tick
     // Only a valid doc replaces memory: an unreadable, corrupt or newer-schema file keeps the last
     // view. A reset this window requested stays visible until the holder has written it.
     if (typeof onDisk === 'object' && onDisk.generation >= this.doc.generation) this.doc = onDisk;
@@ -206,6 +207,7 @@ export class ProgressStore implements vscode.Disposable {
   }
 
   private advance(now: number): void {
+    if (!this.holding) return; // a failed save in consumeRequests released the lease
     const clock = { now, tzOffsetMinutes: new Date(now).getTimezoneOffset() };
     const { state, unlocked } = isProgressionEnabled()
       ? applyTick(this.doc.state, this.provider.getAllSessions(), clock)

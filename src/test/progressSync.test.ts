@@ -203,10 +203,10 @@ describe('progress file (rulings R7, R12)', () => {
   });
 
   it('a holder starts fresh when there is no file, or when both are invalid, keeping the bad file aside', () => {
-    expect(loadForHolder(file, T)).toEqual(emptyDoc());
+    expect(loadForHolder(file, T)).toEqual(emptyDoc(T)); // a fresh start outranks any older generation
     put('progress.json', '{"generation": 3, "st');
     put('progress.json.bak', '');
-    expect(loadForHolder(file, T)).toEqual(emptyDoc());
+    expect(loadForHolder(file, T)).toEqual(emptyDoc(T));
     expect(fs.readFileSync(`${file}.corrupt-${String(T)}`, 'utf8')).toBe('{"generation": 3, "st');
     expect(fs.existsSync(file)).toBe(false);
   });

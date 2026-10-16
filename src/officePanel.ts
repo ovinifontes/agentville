@@ -34,6 +34,9 @@ const OFFICE_CSS = `
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* Raise the bubble under the pointer or keyboard focus above its neighbours, still below the
+     overflow chip (z 5) and the feed (z 10). */
+  .bubble:hover, .bubble:focus-visible { z-index: 4; }
   .name-tag {
     position: absolute;
     z-index: 2;

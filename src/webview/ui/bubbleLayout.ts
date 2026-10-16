@@ -52,9 +52,13 @@ export function layoutBubbles(boxes: readonly BubbleBox[]): Map<string, number> 
 /**
  * Paint order for bubbles that still overlap (no room left to lift them): by left edge, the
  * rightmost-starting last, so on top. Every bubble painted above another then starts further
- * right, which leaves each one a visible, clickable strip up to the next one's left edge.
+ * right, which leaves each one a visible, clickable strip up to the next one's left edge. On an
+ * exact tie the wider goes under, so the narrower is never covered entirely; then by id, compared
+ * by code unit rather than locale collation, so the order does not depend on the cast's.
  */
 export function stackOrder(boxes: readonly BubbleBox[]): string[] {
   const left = (box: BubbleBox): number => box.x - box.width / 2;
-  return [...boxes].sort((a, b) => left(a) - left(b)).map((box) => box.id);
+  return [...boxes]
+    .sort((a, b) => left(a) - left(b) || b.width - a.width || Number(a.id > b.id) - Number(a.id < b.id))
+    .map((box) => box.id);
 }

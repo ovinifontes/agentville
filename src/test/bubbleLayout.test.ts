@@ -46,4 +46,12 @@ describe('layoutBubbles', () => {
     const boxes = widths.map((width, i) => ({ id: `b${String(i)}`, x: 194 + i * 17.5, bottom: 40, width, height: 19 }));
     expect(stackOrder(boxes)).toEqual(['b0', 'b2', 'b1', 'b4', 'b3']);
   });
+
+  it('breaks a tie on the left edge by width, widest first, then by id', () => {
+    // Same left edge (100): the narrow one goes on top, or the wide one would cover it entirely.
+    const narrow = { id: 'narrow', x: 130, bottom: 40, width: 60, height: 19 };
+    const wide = { id: 'wide', x: 160, bottom: 40, width: 120, height: 19 };
+    expect(stackOrder([narrow, wide])).toEqual(['wide', 'narrow']);
+    expect(stackOrder([{ ...wide, id: 'b' }, narrow, { ...wide, id: 'a' }])).toEqual(['a', 'b', 'narrow']);
+  });
 });

@@ -111,6 +111,14 @@ describe('reconcile', () => {
     expect(reconcile([leaving], [])).toHaveLength(0);
   });
 
+  it('stops a leaving character where it stands when its agent comes back', () => {
+    const leaving: Character = { ...reconcile([], [agent()])[0], state: 'leaving', x: 120, y: 80 };
+    const [next] = reconcile([leaving], [agent()]);
+    expect(next.state).toBe('idle');
+    expect(next.targetX).toBe(120);
+    expect(next.targetY).toBe(80);
+  });
+
   it('does not mutate the cast it is given', () => {
     const cast = reconcile([], [agent()]);
     const snapshot = JSON.stringify(cast);

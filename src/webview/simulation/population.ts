@@ -57,7 +57,13 @@ export function reconcile(cast: readonly Character[], agents: readonly AgentView
     const agent = byId.get(character.id);
     if (agent) {
       seen.add(character.id);
-      kept.push({ ...character, agent });
+      // Back before it reached the door: stop where it stands, so the renderer pauses it and
+      // it wanders on — still 'leaving', it would walk out and wait at the door forever.
+      kept.push(
+        character.state === 'leaving'
+          ? { ...character, agent, state: 'idle', targetX: character.x, targetY: character.y }
+          : { ...character, agent },
+      );
       continue;
     }
     if (character.state === 'leaving' && hasReachedDoor(character)) {

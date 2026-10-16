@@ -21,6 +21,17 @@ type TreeItemType = BrandTreeItem | MessageTreeItem | SessionTreeItem | SubAgent
 // the filter/construct/watch call sites below so they can't drift out of sync.
 const CLAUDE_CODE_BRAND = 'claude-code' as const;
 
+/**
+ * Copies: the office and progression see background agents as subagents, but the cached
+ * sessions and the tree's nested map stay untouched.
+ */
+function withNested(sessions: Session[], nested: ReadonlyMap<string, SubAgent[]>): Session[] {
+  return sessions.map((session) => ({
+    ...session,
+    subagents: [...session.subagents, ...(nested.get(session.id) ?? [])],
+  }));
+}
+
 export class SessionTreeDataProvider implements vscode.TreeDataProvider<TreeItemType> {
   private _onDidChangeTreeData: vscode.EventEmitter<TreeItemType | undefined | null | void> = new vscode.EventEmitter<
     TreeItemType | undefined | null | void
@@ -55,6 +66,11 @@ export class SessionTreeDataProvider implements vscode.TreeDataProvider<TreeItem
 
   public isMonitoringEnabled(): boolean {
     return this.monitoringEnabled;
+  }
+
+  /** Monitoring is on and the first load has finished, so the sessions are real (not a loading []). */
+  public isLive(): boolean {
+    return this.monitoringEnabled && this.isReady;
   }
 
   /**
@@ -130,12 +146,13 @@ export class SessionTreeDataProvider implements vscode.TreeDataProvider<TreeItem
 
   /** Sessions exactly as the tree renders them (deduped, nested, filtered). */
   public getSessions(): Session[] {
-    // Copies: the office sees background agents as subagents, but the cached sessions and the
-    // tree's nested map stay untouched.
-    return this.getVisibleSessions().map((session) => ({
-      ...session,
-      subagents: [...session.subagents, ...(this.nestedAgents.get(session.id) ?? [])],
-    }));
+    return withNested(this.getVisibleSessions(), this.nestedAgents);
+  }
+
+  /** Every project's sessions (last-hour rule and dedupe kept, no workspace filter), for progression. */
+  public getAllSessions(): Session[] {
+    const { topLevel, nestedAgents } = assembleVisibleSessions(Array.from(this.sessions.values()), [], Date.now());
+    return withNested(topLevel, nestedAgents);
   }
 
   public getTreeItem(element: TreeItemType): vscode.TreeItem {

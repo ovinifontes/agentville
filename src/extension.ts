@@ -38,7 +38,7 @@ export function activate(context: vscode.ExtensionContext) {
   // createTreeView (over registerTreeDataProvider) lets us set a header message during loading.
   const treeView = vscode.window.createTreeView('agentville.world', { treeDataProvider: provider });
   // Subscribed before any office panel, so each refresh advances progress before the office reads it.
-  const progress = new ProgressStore(context.globalState, provider);
+  const progress = new ProgressStore(context.globalStorageUri.fsPath, provider);
   context.subscriptions.push(treeView, provider, progress);
 
   // Register all commands synchronously — zero I/O cost

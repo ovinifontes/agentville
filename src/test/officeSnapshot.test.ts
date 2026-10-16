@@ -153,6 +153,14 @@ describe('buildSnapshot', () => {
     expect(levels).toEqual({ 'sess-1': 1, 'sub-1': 3, 'sub-2': 1, 'bg-1': 2 });
   });
 
+  it("tags a grandchild with its own type, not its launcher's", () => {
+    const progress = toProgressView({ ...freshState(), types: { planner: { workMs: 0, runs: 5 } } }, true);
+    const tree = subagent({ name: 'debugger', children: [subagent({ id: 'grand', name: 'Planner' })] });
+    const agents = buildSnapshot([session({ subagents: [tree] })], new Map(), progress).agents;
+    expect(agents.find((a) => a.id === 'grand')?.level).toBe(2);
+    expect(agents.find((a) => a.id === 'sub-1')?.level).toBe(1);
+  });
+
   it('leaves levels off when progression is disabled or absent', () => {
     const sessions = [session({ subagents: [subagent()] })];
     const disabled = buildSnapshot(sessions, new Map(), toProgressView(freshState(), false));

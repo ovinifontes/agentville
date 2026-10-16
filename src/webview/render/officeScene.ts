@@ -11,6 +11,7 @@ import Phaser from 'phaser';
 import type { AgentView } from '../../officeTypes';
 import { reconcile, SPRITE_VARIANTS, type Character } from '../simulation/population';
 import { followActivity, step } from '../simulation/movement';
+import { NightLight } from './nightLight';
 import { OFFICE_MAP, TILE_SIZE, WORLD_HEIGHT, WORLD_WIDTH } from '../simulation/world';
 
 const CHARACTER_FRAME = { frameWidth: 16, frameHeight: 24 };
@@ -114,6 +115,7 @@ export class OfficeScene extends Phaser.Scene {
   // Monitoring off (spec §9): asked for by setActive(false), carried out by the next update().
   private sleepRequested = false;
   private asleep = false;
+  private nightLight?: NightLight;
 
   constructor(
     private readonly assetsBaseUri: string,
@@ -129,6 +131,7 @@ export class OfficeScene extends Phaser.Scene {
 
   create(): void {
     this.drawMap();
+    this.nightLight = new NightLight(this);
     this.createWalkAnimations();
     // The Scale Manager already watches the window and polls the parent's size in its own
     // step; RESIZE is our cue to re-fit. Its listeners are removed when the game is destroyed.
@@ -226,6 +229,7 @@ export class OfficeScene extends Phaser.Scene {
       this.sleepLoop();
       return;
     }
+    this.nightLight?.update(new Date());
     if (this.pending.length > 0 || this.cast.length > 0) {
       this.cast = reconcile(this.cast, this.pending);
     }

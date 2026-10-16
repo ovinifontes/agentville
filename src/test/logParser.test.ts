@@ -405,4 +405,48 @@ describe('LogParser', () => {
     expect(session.subagents.length).toBe(1);
     expect(session.subagents[0].name).toBe('Café Agent ☕');
   });
+
+  describe('api-request-blob replay entries (Claude Code 2.1.300)', () => {
+    const blob = (content: unknown[]) => ({
+      type: 'api-request-blob',
+      hash: 'abc123',
+      sessionId: 's1',
+      message: { role: 'user', content },
+    });
+    const write = (...entries: object[]) => {
+      fs.writeFileSync(tempFilePath, entries.map((e) => JSON.stringify(e)).join('\n') + '\n');
+    };
+
+    it('leaves lastEntryType as user when a blob follows the user turn', () => {
+      write(
+        {
+          timestamp: '2026-10-16T00:00:00.000Z',
+          type: 'user',
+          message: { role: 'user', content: [{ type: 'text', text: 'Do the thing' }] },
+        },
+        blob([{ type: 'text', text: 'replayed' }]),
+      );
+      expect(new LogParser().parse(tempFilePath, 'claude-code').lastEntryType).toBe('user');
+    });
+
+    it('keeps a backgrounded subagent working when a blob replays the launch tool_result', () => {
+      write(
+        {
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'tool_use', id: 'toolu_1', name: 'Agent', input: { description: 'Work' } }],
+          },
+        },
+        {
+          type: 'user',
+          message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_1' }] },
+          toolUseResult: { status: 'async_launched', agentId: 'a1' },
+        },
+        blob([{ type: 'tool_result', tool_use_id: 'toolu_1' }]),
+      );
+      const session = new LogParser().parse(tempFilePath, 'claude-code');
+      expect(session.subagents.map((s) => s.status)).toEqual(['working']);
+    });
+  });
 });

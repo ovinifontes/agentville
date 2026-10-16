@@ -336,34 +336,3 @@ describe('detectSubagents — forked skill launch (context: fork)', () => {
     expect(subagents.get('toolu_resume_1')?.status).toBe('stopped');
   });
 });
-
-describe('detectSubagents — api-request-blob replay entries', () => {
-  // Real shape (Claude Code 2.1.300): a request replay holding the launch's tool_result with no
-  // toolUseResult marker. It must not read as the backgrounded agent finishing.
-  it('does not mark a backgrounded subagent stopped when its launch ACK is replayed in a blob', () => {
-    const subagents = new Map<string, SubAgent>();
-    detectSubagents(
-      {
-        type: 'assistant',
-        message: { content: [{ type: 'tool_use', id: 'toolu_1', name: 'Agent', input: { description: 'Work' } }] },
-      },
-      subagents,
-    );
-    detectSubagents(
-      {
-        type: 'user',
-        message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_1' }] },
-        toolUseResult: { status: 'async_launched' },
-      },
-      subagents,
-    );
-    detectSubagents(
-      {
-        type: 'api-request-blob',
-        message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_1' }] },
-      },
-      subagents,
-    );
-    expect(subagents.get('toolu_1')?.status).toBe('working');
-  });
-});

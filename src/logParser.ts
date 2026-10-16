@@ -129,6 +129,15 @@ export class LogParser {
     }
   }
 
+  private recordClientInfo(json: LogEntry, session: Session): void {
+    if (typeof json.entrypoint === 'string') {
+      session.entrypoint = json.entrypoint;
+    }
+    if (typeof json.version === 'string') {
+      session.claudeVersion = json.version;
+    }
+  }
+
   private parseLogLine(ctx: LogLineContext): void {
     const { line, session, currentSubagents, stats } = ctx;
     if (!line.trim()) {
@@ -136,6 +145,14 @@ export class LogParser {
     }
     try {
       const json = JSON.parse(line) as LogEntry;
+      // Claude Code quirk first observed in 2.1.300: `api-request-blob` entries replay the API
+      // request (thinking blocks, the launch's tool_result without its toolUseResult ACK marker).
+      // They are not turns: read as one they overwrite lastEntryType and mark backgrounded
+      // subagents stopped. Skipped before any detector or signal sees them. No-op for Antigravity,
+      // which never writes this entry type.
+      if (json.type === 'api-request-blob') {
+        return;
+      }
       // Subagent transcripts (<sessionId>/subagents/agent-*.jsonl, or same-dir sidechains) mark
       // every entry isSidechain:true. Flag the session so it's excluded from the standalone list —
       // otherwise the recursive **/*.jsonl watcher surfaces it as a phantom top-level session whose
@@ -144,12 +161,7 @@ export class LogParser {
         session.isSidechain = true;
       }
       this.trackTurnSignals(json, session);
-      if (typeof json.entrypoint === 'string') {
-        session.entrypoint = json.entrypoint;
-      }
-      if (typeof json.version === 'string') {
-        session.claudeVersion = json.version;
-      }
+      this.recordClientInfo(json, session);
       this.parseTimestamp(json, session, stats);
       this.projectPaths.detectGitBranch(json, session);
       this.projectPaths.detectWorktreeName(json, session);

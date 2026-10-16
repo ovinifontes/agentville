@@ -7,6 +7,8 @@ import { createOffice } from './render/officeScene';
 import { BubbleLayer } from './ui/bubbles';
 import { NameTagLayer } from './ui/nameTags';
 import { EntranceSign } from './ui/entranceSign';
+import { TeamPanel } from './ui/teamPanel';
+import { ToastLayer } from './ui/toasts';
 import { FeedPanel } from './ui/feedPanel';
 import type { AgentView, ToExtension, ToWebview } from '../officeTypes';
 
@@ -31,6 +33,10 @@ const bubbles = new BubbleLayer(root, (agentId) => {
 });
 
 const nameTags = new NameTagLayer(root);
+const teamPanel = new TeamPanel(root);
+const toasts = new ToastLayer(root, (ids) => {
+  vscode.postMessage({ type: 'achievementsShown', ids });
+});
 const entrance = new EntranceSign(root);
 
 const scene = createOffice(root, assetsBaseUri);
@@ -49,6 +55,7 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
   switch (message.type) {
     case 'snapshot':
       agents = message.agents;
+      nameTags.setLevels(agents);
       feed.syncPresence(agents.map((a) => a.id));
       scene.setActive(true);
       scene.setAgents(message.agents);
@@ -57,7 +64,12 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
       return;
     case 'progress':
       scene.setDecor(message.progress.decor, message.progress.enabled);
-      // Task 6 seam: team panel and achievement toasts are fed from message.progress here.
+      teamPanel.render(message.progress);
+      if (message.progress.enabled) {
+        toasts.show(message.progress.achievements, message.progress.toasts);
+      } else {
+        toasts.clear();
+      }
       return;
     case 'feed':
       feed.render(message.agentId, message.entries);

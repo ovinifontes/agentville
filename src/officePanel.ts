@@ -87,6 +87,69 @@ const OFFICE_CSS = `
     color: var(--vscode-badge-foreground);
     font: 11px var(--vscode-font-family);
   }
+  .team-button {
+    position: absolute;
+    z-index: 6;
+    top: 8px;
+    left: 8px;
+    padding: 2px 6px;
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--vscode-button-secondaryForeground, var(--vscode-editor-foreground));
+    background: var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background));
+    border: 1px solid var(--vscode-editorWidget-border);
+    border-radius: 6px;
+  }
+  /* Under the feed (z 10), which owns the right edge; scrolls when the lists are long. */
+  .team-panel {
+    position: absolute;
+    z-index: 9;
+    box-sizing: border-box;
+    top: 40px;
+    left: 8px;
+    width: 300px;
+    max-width: calc(100% - 16px);
+    max-height: calc(100% - 100px);
+    overflow-y: auto;
+    padding: 4px 12px 12px;
+    background: var(--vscode-sideBar-background);
+    border: 1px solid var(--vscode-editorWidget-border);
+    border-radius: 6px;
+    color: var(--vscode-editor-foreground);
+    font: 12px var(--vscode-font-family);
+  }
+  .team-panel h2 { font-size: 14px; margin: 8px 0 2px; }
+  .team-panel h3 { font-size: 11px; margin: 12px 0 4px; text-transform: uppercase; opacity: 0.65; }
+  .team-row { margin: 0 0 8px; }
+  .team-row.locked { opacity: 0.5; }
+  .team-meta { opacity: 0.7; font-size: 11px; }
+  .team-bar { height: 4px; margin-top: 3px; border-radius: 2px; background: var(--vscode-editorWidget-border); }
+  .team-bar > div { height: 100%; border-radius: 2px; background: var(--vscode-progressBar-background, var(--vscode-badge-background)); }
+  .toasts {
+    position: absolute;
+    z-index: 8;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 260px;
+    max-width: calc(100% - 120px);
+    pointer-events: none;
+  }
+  .toast {
+    padding: 6px 10px;
+    border-radius: 8px;
+    font: 11px var(--vscode-font-family);
+    color: var(--vscode-editor-foreground);
+    background: var(--vscode-editorWidget-background);
+    border: 1px solid var(--vscode-editorWidget-border);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .toast { animation: toast-in 0.25s ease-out; }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(-6px); } }
+  }
   .hidden {
     display: none;
   }

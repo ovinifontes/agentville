@@ -2,6 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildSnapshot, MAX_VISIBLE_AGENTS } from '../officeSnapshot';
 import { sessionAsSubagent } from '../sessionDedupe';
+import { freshState } from '../progressRules';
+import { toProgressView } from '../progressView';
 import type { Session, SubAgent } from '../types';
 
 function subagent(over: Partial<SubAgent> = {}): SubAgent {
@@ -131,5 +133,38 @@ describe('buildSnapshot', () => {
 
   it('returns an empty snapshot for no sessions', () => {
     expect(buildSnapshot([], new Map())).toEqual({ agents: [], truncated: 0 });
+  });
+
+  it("tags each agent with its type's level, level 1 for a type with no XP yet", () => {
+    const progress = toProgressView(
+      { ...freshState(), types: { debugger: { workMs: 0, runs: 15 }, 'background agent': { workMs: 0, runs: 5 } } },
+      true,
+    );
+    const sessions = [
+      session({
+        subagents: [
+          subagent({ name: '  Debugger ' }),
+          subagent({ id: 'sub-2', name: 'planner' }),
+          sessionAsSubagent(session({ id: 'bg-1', sessionTitle: 'Review', logFilePath: '/p/bg-1.jsonl' })),
+        ],
+      }),
+    ];
+    const levels = Object.fromEntries(buildSnapshot(sessions, new Map(), progress).agents.map((a) => [a.id, a.level]));
+    expect(levels).toEqual({ 'sess-1': 1, 'sub-1': 3, 'sub-2': 1, 'bg-1': 2 });
+  });
+
+  it("tags a grandchild with its own type, not its launcher's", () => {
+    const progress = toProgressView({ ...freshState(), types: { planner: { workMs: 0, runs: 5 } } }, true);
+    const tree = subagent({ name: 'debugger', children: [subagent({ id: 'grand', name: 'Planner' })] });
+    const agents = buildSnapshot([session({ subagents: [tree] })], new Map(), progress).agents;
+    expect(agents.find((a) => a.id === 'grand')?.level).toBe(2);
+    expect(agents.find((a) => a.id === 'sub-1')?.level).toBe(1);
+  });
+
+  it('leaves levels off when progression is disabled or absent', () => {
+    const sessions = [session({ subagents: [subagent()] })];
+    const disabled = buildSnapshot(sessions, new Map(), toProgressView(freshState(), false));
+    expect(disabled.agents.every((a) => !('level' in a))).toBe(true);
+    expect(buildSnapshot(sessions, new Map()).agents.every((a) => !('level' in a))).toBe(true);
   });
 });

@@ -35,6 +35,7 @@ export default defineConfig({
         'src/treeItems.ts',
         'src/logger.ts',
         'src/officePanel.ts',
+        'src/progressStore.ts',
         'src/webview/main.ts',
         'src/webview/render/**',
         'src/webview/ui/**',

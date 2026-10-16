@@ -94,6 +94,10 @@ function applyMetadata(sub: SubAgent, meta: SidecarMetadata | undefined): void {
   if (meta.model && !sub.model) {
     sub.model = meta.model;
   }
+  // The launch's own `subagent_type` wins (subagentDetector.ts); the sidecar only fills a gap.
+  if (meta.agentType && !sub.agentType) {
+    sub.agentType = meta.agentType;
+  }
   // Unlike name/model above, agentId is applied whenever the sidecar has one — never gated on
   // "only if sub doesn't already have one" — because it's identity, not cosmetic enrichment:
   // this is the assignment needsSidecarData exists to guarantee actually runs (see its comment).

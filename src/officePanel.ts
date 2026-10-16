@@ -7,6 +7,7 @@ import { buildSnapshot } from './officeSnapshot';
 import { RecentEntryStore } from './recentEntries';
 import { SubagentTranscriptReader, workingTranscripts } from './subagentTranscriptReader';
 import { logDebug } from './logger';
+import type { ProgressStore } from './progressStore';
 import type { SessionTreeDataProvider } from './sessionTreeDataProvider';
 import type { ToExtension, ToWebview } from './officeTypes';
 import type { Session } from './types';
@@ -86,6 +87,69 @@ const OFFICE_CSS = `
     color: var(--vscode-badge-foreground);
     font: 11px var(--vscode-font-family);
   }
+  .team-button {
+    position: absolute;
+    z-index: 6;
+    top: 8px;
+    left: 8px;
+    padding: 2px 6px;
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--vscode-button-secondaryForeground, var(--vscode-editor-foreground));
+    background: var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background));
+    border: 1px solid var(--vscode-editorWidget-border);
+    border-radius: 6px;
+  }
+  /* Under the feed (z 10), which owns the right edge; scrolls when the lists are long. */
+  .team-panel {
+    position: absolute;
+    z-index: 9;
+    box-sizing: border-box;
+    top: 40px;
+    left: 8px;
+    width: 300px;
+    max-width: calc(100% - 16px);
+    max-height: calc(100% - 100px);
+    overflow-y: auto;
+    padding: 4px 12px 12px;
+    background: var(--vscode-sideBar-background);
+    border: 1px solid var(--vscode-editorWidget-border);
+    border-radius: 6px;
+    color: var(--vscode-editor-foreground);
+    font: 12px var(--vscode-font-family);
+  }
+  .team-panel h2 { font-size: 14px; margin: 8px 0 2px; }
+  .team-panel h3 { font-size: 11px; margin: 12px 0 4px; text-transform: uppercase; opacity: 0.65; }
+  .team-row { margin: 0 0 8px; }
+  .team-row.locked { opacity: 0.5; }
+  .team-meta { opacity: 0.7; font-size: 11px; }
+  .team-bar { height: 4px; margin-top: 3px; border-radius: 2px; background: var(--vscode-editorWidget-border); }
+  .team-bar > div { height: 100%; border-radius: 2px; background: var(--vscode-progressBar-background, var(--vscode-badge-background)); }
+  .toasts {
+    position: absolute;
+    z-index: 8;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 260px;
+    max-width: calc(100% - 120px);
+    pointer-events: none;
+  }
+  .toast {
+    padding: 6px 10px;
+    border-radius: 8px;
+    font: 11px var(--vscode-font-family);
+    color: var(--vscode-editor-foreground);
+    background: var(--vscode-editorWidget-background);
+    border: 1px solid var(--vscode-editorWidget-border);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .toast { animation: toast-in 0.25s ease-out; }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(-6px); } }
+  }
   .hidden {
     display: none;
   }
@@ -93,6 +157,12 @@ const OFFICE_CSS = `
     display: block;
   }
 `;
+
+/** What the office mirrors: live sessions and office progression. */
+export interface OfficeSources {
+  provider: SessionTreeDataProvider;
+  progress: ProgressStore;
+}
 
 export class OfficePanel {
   private static current: OfficePanel | undefined;
@@ -103,8 +173,9 @@ export class OfficePanel {
   private readonly actions = new Map<string, string>();
   private openFeedAgentId: string | undefined;
   private webviewReady = false;
+  private postedProgress = ''; // the last progress view this webview got, as JSON
 
-  static show(context: vscode.ExtensionContext, provider: SessionTreeDataProvider): void {
+  static show(context: vscode.ExtensionContext, sources: OfficeSources): void {
     if (OfficePanel.current) {
       OfficePanel.current.panel.reveal(vscode.ViewColumn.Active);
       return;
@@ -115,13 +186,13 @@ export class OfficePanel {
       // dist/ holds both the webview bundle and the office art (copied by esbuild.js).
       localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist')],
     });
-    OfficePanel.current = new OfficePanel(panel, context, provider);
+    OfficePanel.current = new OfficePanel(panel, context, sources);
   }
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
     context: vscode.ExtensionContext,
-    private readonly provider: SessionTreeDataProvider,
+    private readonly sources: OfficeSources,
   ) {
     panel.webview.html = this.html(context.extensionUri);
 
@@ -132,8 +203,11 @@ export class OfficePanel {
       panel.webview.onDidReceiveMessage((message: ToExtension) => {
         this.onMessage(message);
       }),
-      provider.onDidChangeSessions(() => {
+      sources.provider.onDidChangeSessions(() => {
         this.push();
+      }),
+      sources.progress.onDidChange(() => {
+        this.pushProgress();
       }),
       panel.onDidChangeViewState(() => {
         this.onViewState();
@@ -144,9 +218,11 @@ export class OfficePanel {
   private onViewState(): void {
     if (this.panel.visible) {
       this.push();
+      this.pushProgress();
     } else {
       // The webview (and its side panel) is destroyed while hidden.
       this.openFeedAgentId = undefined;
+      this.postedProgress = '';
     }
   }
 
@@ -154,7 +230,9 @@ export class OfficePanel {
     switch (message.type) {
       case 'ready':
         this.webviewReady = true;
+        this.postedProgress = ''; // a new webview has nothing yet
         this.push();
+        this.pushProgress();
         return;
       case 'openFeed':
         this.openFeedAgentId = message.agentId;
@@ -169,11 +247,14 @@ export class OfficePanel {
       case 'openProject':
         void vscode.commands.executeCommand('agentville.openProject', this.itemFor(message.agentId));
         return;
+      case 'achievementsShown':
+        this.sources.progress.markToastsShown(message.ids);
+        return;
     }
   }
 
   private itemFor(agentId: string): { session: Session } | undefined {
-    const session = this.provider.getSessions().find((s) => s.id === agentId);
+    const session = this.sources.provider.getSessions().find((s) => s.id === agentId);
     return session ? { session } : undefined;
   }
 
@@ -191,9 +272,9 @@ export class OfficePanel {
       return;
     }
     try {
-      const sessions = this.provider.getSessions();
+      const sessions = this.sources.provider.getSessions();
       this.refreshActions(sessions);
-      const { agents, truncated } = buildSnapshot(sessions, this.actions);
+      const { agents, truncated } = buildSnapshot(sessions, this.actions, this.sources.progress.current());
       const ids = agents.map((a) => a.id);
       // The open feed's agent keeps its last entries after it leaves, until the panel closes.
       this.entries.retain(this.openFeedAgentId ? [...ids, this.openFeedAgentId] : ids);
@@ -204,6 +285,19 @@ export class OfficePanel {
       }
     } catch (error) {
       logDebug(`OfficePanel.push failed: ${String(error)}`);
+    }
+  }
+
+  /** Post the progress view when it changed. Like push(), never while hidden; independent of monitoring. */
+  private pushProgress(): void {
+    if (!this.webviewReady || !this.panel.visible) {
+      return;
+    }
+    const progress = this.sources.progress.current();
+    const key = JSON.stringify(progress);
+    if (key !== this.postedProgress) {
+      this.postedProgress = key;
+      this.post({ type: 'progress', progress });
     }
   }
 

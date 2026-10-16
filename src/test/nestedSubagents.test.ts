@@ -117,6 +117,7 @@ describe('refreshNestedSubagents', () => {
 
     expect(parent.children).toHaveLength(1);
     expect(parent.children?.[0].name).toBe('Explore');
+    expect(parent.children?.[0].agentType).toBe('Explore'); // progress type (ruling R9)
   });
 
   it('attaches children to a parent identified by sub.id when sub.id === agentId (forked-skill parent)', () => {

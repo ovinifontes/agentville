@@ -3,7 +3,8 @@ import * as fs from 'fs';
 import { SessionTreeDataProvider } from './sessionTreeDataProvider';
 import { SessionTreeItem } from './treeItems';
 import { logDebug } from './logger';
-import { OfficePanel } from './officePanel';
+import { OfficePanel, type OfficeSources } from './officePanel';
+import { PROGRESSION_SETTING, ProgressStore } from './progressStore';
 
 // Delay before the first log scan, giving Claude Code / Antigravity time to boot
 // and read their own files before we start competing for them.
@@ -36,17 +37,19 @@ export function activate(context: vscode.ExtensionContext) {
   // Register tree provider synchronously so the sidebar renders immediately.
   // createTreeView (over registerTreeDataProvider) lets us set a header message during loading.
   const treeView = vscode.window.createTreeView('agentville.world', { treeDataProvider: provider });
-  context.subscriptions.push(treeView, provider);
+  // Subscribed before any office panel, so each refresh advances progress before the office reads it.
+  const progress = new ProgressStore(context.globalStorageUri.fsPath, provider);
+  context.subscriptions.push(treeView, provider, progress);
 
   // Register all commands synchronously — zero I/O cost
-  registerCommands(context, provider);
+  registerCommands(context, { provider, progress });
 
   // React to the global enable/disable setting. This fires in every window when the
   // (application-scoped) setting changes, so toggling in one instance stops them all.
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration(`${CONFIG_SECTION}.${SHOW_ALL_KEY}`)) {
-        provider.refresh(); // re-filter the tree and the office
+      if (e.affectsConfiguration(`${CONFIG_SECTION}.${SHOW_ALL_KEY}`) || e.affectsConfiguration(PROGRESSION_SETTING)) {
+        provider.refresh(); // re-filter the tree and the office; level tags follow the progression setting
       }
       if (!e.affectsConfiguration(`${CONFIG_SECTION}.${ENABLED_KEY}`)) {
         return;
@@ -82,10 +85,8 @@ export function activate(context: vscode.ExtensionContext) {
   );
 }
 
-function registerCommands(
-  context: vscode.ExtensionContext,
-  provider: import('./sessionTreeDataProvider').SessionTreeDataProvider,
-): void {
+function registerCommands(context: vscode.ExtensionContext, sources: OfficeSources): void {
+  const { provider, progress } = sources;
   const refreshCmd = vscode.commands.registerCommand('agentville.refresh', () => {
     logDebug('command(): refresh invoked');
     provider.refresh();
@@ -141,9 +142,24 @@ function registerCommands(
 
   const openOfficeCmd = vscode.commands.registerCommand('agentville.openOffice', () => {
     logDebug('command(): openOffice invoked');
-    OfficePanel.show(context, provider);
+    OfficePanel.show(context, sources);
   });
   context.subscriptions.push(openOfficeCmd);
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('agentville.resetProgress', async () => {
+      const choice = await vscode.window.showWarningMessage(
+        'Reset AgentVille office progress? All XP, levels, achievements and decoration will be lost.',
+        { modal: true },
+        'Reset',
+      );
+      if (choice === 'Reset') {
+        logDebug('command(): reset office progress');
+        progress.reset();
+        provider.refresh(); // a fresh snapshot, so the office's level tags drop at once
+      }
+    }),
+  );
 }
 
 export function deactivate() {

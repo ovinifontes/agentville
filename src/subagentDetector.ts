@@ -64,6 +64,7 @@ function detectClaudeCalls(json: LogEntry, currentSubagents: Map<string, SubAgen
           task: getClaudeTask(block),
           status: 'working',
           model: getClaudeModel(block),
+          agentType: getClaudeAgentType(block),
         });
       }
     }
@@ -85,6 +86,15 @@ function getClaudeName(block: { input?: { name?: string } }): string {
 
 function getClaudeModel(block: { input?: { model?: string } }): string | undefined {
   return block.input?.model;
+}
+
+/** The Agent tool's `subagent_type` (e.g. "Explore", "general-purpose") is the agent type progress
+ * is earned by (ruling R9). It isn't part of LogEntry's typed `input` shape, so it is read as
+ * unknown and narrowed here, like getSendMessageTarget. A SendMessage resume re-keys the same
+ * object, so the type survives it. */
+function getClaudeAgentType(block: { input?: unknown }): string | undefined {
+  const input = block.input as Record<string, unknown> | undefined;
+  return typeof input?.subagent_type === 'string' ? input.subagent_type : undefined;
 }
 
 /**
@@ -217,6 +227,7 @@ function detectClaudeStandaloneCalls(json: LogEntry, currentSubagents: Map<strin
       task: getClaudeTask(json),
       status: 'working',
       model: getClaudeModel(json),
+      agentType: getClaudeAgentType(json),
     });
   }
 }

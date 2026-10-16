@@ -1,16 +1,22 @@
 Office baseline assets: licence
 
-resources/office/tiles.png and resources/office/characters.png are composed
-(cropped, arranged, and in places layered or palette-swapped) from sprites in
-the following packs by Kenney (www.kenney.nl). Each pack is released under
-Creative Commons Zero, CC0 1.0 Universal.
+resources/office/tiles.png, resources/office/characters.png and
+resources/office/decor.png are composed (cropped, arranged, and in places
+layered or palette-swapped) from sprites in the following packs by Kenney
+(www.kenney.nl). Each pack is released under Creative Commons Zero, CC0 1.0
+Universal.
 
 - Roguelike/RPG pack: https://kenney.nl/assets/roguelike-rpg-pack
   Used in tiles.png: floor, wall, rug, desk screen, shelf, door.
+  Used in decor.png: clock, both paintings, trophy shelf, certificate.
 - Roguelike Indoors: https://kenney.nl/assets/roguelike-indoors
   Used in tiles.png: desk, chair, meeting table, plant, coffee counter.
+  Used in decor.png: poster.
 - RPG Urban Pack: https://kenney.nl/assets/rpg-urban-pack
   Used in tiles.png: sofa. Used in characters.png: every character set.
+  Used in decor.png: whiteboard.
+- Roguelike Modern City: https://kenney.nl/assets/roguelike-modern-city
+  Used in decor.png: window.
 
 Licence statement in each pack's License.txt:
 
@@ -19,6 +25,9 @@ Licence statement in each pack's License.txt:
   Roguelike Indoor:    License (Creative Commons Zero, CC0)
                        http://creativecommons.org/publicdomain/zero/1.0/
   RPG Urban Pack 1.0:  License: (Creative Commons Zero, CC0)
+                       http://creativecommons.org/publicdomain/zero/1.0/
+  Roguelike Modern City (2.0):
+                       License: (Creative Commons Zero, CC0)
                        http://creativecommons.org/publicdomain/zero/1.0/
 
 Credit is not required by the licence. Kenney asks for it as a courtesy:

@@ -16,6 +16,7 @@ Full licence text: `resources/office/LICENSE-ASSETS.txt`
   7 sofa `S`, 8 coffee counter `K`, 9 shelf/printer `R`, 10 door `_`. Floor and wall are opaque. The renderer
   draws the floor under every tile, so tiles 2–10 are transparent wherever the floor should show through.
   Each furniture tile is one segment that repeats side by side (`DDDD` is one desk, four tiles wide).
+  Chairs (4) and the sofa (7) are also seats: characters stand on them while working or resting, so the art must read as sat-on from above.
 - `characters.png` — 16×24 frames, 4 directions × 4 walk frames per character set,
   character sets stacked vertically
   - 4 columns × 32 rows, 64×768: 8 sets × 4 direction rows × 24 px.

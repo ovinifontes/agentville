@@ -39,8 +39,7 @@ export class BubbleLayer {
     for (const box of boxes) {
       const node = this.nodes.get(box.id);
       if (node) {
-        // The `translate` property (not `transform`) so the hover `scale` grows around the anchor (officePanel CSS).
-        node.style.translate = `calc(${box.x}px - 50%) calc(${bottoms.get(box.id) ?? box.bottom}px - 100%)`;
+        node.style.transform = `translate(${box.x}px, ${bottoms.get(box.id) ?? box.bottom}px) translate(-50%, -100%)`;
       }
     }
     // Bubbles share one z-index, so DOM order decides which overlapping one is on top.
@@ -80,7 +79,6 @@ export class BubbleLayer {
     let size = this.sizes.get(id);
     if (node.textContent !== text || !size) {
       node.textContent = text;
-      node.title = action; // the full text when it was cut
       size = { width: node.offsetWidth, height: node.offsetHeight };
       this.sizes.set(id, size);
     }

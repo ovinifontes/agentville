@@ -3,6 +3,7 @@
 // reference to the previous array while this runs.
 
 import type { AgentView } from '../../officeTypes';
+import { findPath, type Point } from './pathfinding';
 import { DOOR } from './world';
 
 export const SPRITE_VARIANTS = 4;
@@ -17,6 +18,8 @@ export interface Character {
   targetX: number;
   targetY: number;
   state: CharacterState;
+  /** Remaining waypoints (tile centres) toward the target; empty when walking straight. */
+  path: Point[];
   agent: AgentView;
 }
 
@@ -38,6 +41,7 @@ function spawn(agent: AgentView): Character {
     targetX: DOOR.x,
     targetY: DOOR.y,
     state: 'entering',
+    path: [],
     agent,
   };
 }
@@ -61,7 +65,7 @@ export function reconcile(cast: readonly Character[], agents: readonly AgentView
       // it wanders on — still 'leaving', it would walk out and wait at the door forever.
       kept.push(
         character.state === 'leaving'
-          ? { ...character, agent, state: 'idle', targetX: character.x, targetY: character.y }
+          ? { ...character, agent, state: 'idle', targetX: character.x, targetY: character.y, path: [] }
           : { ...character, agent },
       );
       continue;
@@ -69,7 +73,9 @@ export function reconcile(cast: readonly Character[], agents: readonly AgentView
     if (character.state === 'leaving' && hasReachedDoor(character)) {
       continue; // walked out — drop it
     }
-    kept.push({ ...character, state: 'leaving', targetX: DOOR.x, targetY: DOOR.y });
+    // Route once, when it starts leaving; reconcile runs every frame.
+    const path = character.state === 'leaving' ? character.path : findPath(character, DOOR);
+    kept.push({ ...character, state: 'leaving', targetX: DOOR.x, targetY: DOOR.y, path });
   }
 
   const spawned = agents.filter((agent) => !seen.has(agent.id)).map(spawn);

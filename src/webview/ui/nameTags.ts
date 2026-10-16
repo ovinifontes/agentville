@@ -7,7 +7,7 @@ import { pruneNodes } from './pruneNodes';
 
 const MAX_NAME_CHARS = 18;
 // screenY is the head top; the 16 px body plus a 2 px gap puts the tag just under the feet.
-// Characters are drawn at an integer zoom, so the offset scales with it.
+// Characters are drawn at a fractional zoom, so the offset scales with it.
 const BELOW_FEET_PX = 18;
 
 export class NameTagLayer {

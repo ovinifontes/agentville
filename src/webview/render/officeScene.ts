@@ -16,6 +16,10 @@ import { OFFICE_MAP, TILE_SIZE, WORLD_HEIGHT, WORLD_WIDTH } from '../simulation/
 const IDLE_PAUSE_MS = 1200;
 const CHARACTER_FRAME = { frameWidth: 16, frameHeight: 24 };
 const EMPTY_TILE = -1;
+/** Smallest fit zoom: below this the office is unreadable, so it overflows (clipped) instead. */
+const MIN_ZOOM = 0.5;
+/** Defensive guard: setZoom re-enters fit() synchronously, so near-equal zooms must not loop. */
+const ZOOM_EPSILON = 1e-6;
 
 /** Map character → frame index in tiles.png, as recorded in resources/ASSETS.md. */
 const TILE_FRAMES: Readonly<Partial<Record<string, number>>> = {
@@ -151,12 +155,14 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   /**
-   * Integer zoom only (spec §7): the largest whole multiple of the 640x384 world that fits
-   * the parent, at least 1, centred by the Scale Manager.
+   * Fractional fit (deliberate change to spec §7's integer scale): the 640x384 world is scaled
+   * to the largest zoom that fits the parent, at least MIN_ZOOM, centred by the Scale Manager.
+   * `pixelArt` makes the canvas `image-rendering: pixelated`, so pixels stay sharp.
    */
   private fit(): void {
-    const zoom = this.scale.getMaxZoom();
-    if (zoom !== this.scale.zoom) {
+    const { width, height } = this.scale.parentSize;
+    const zoom = Math.max(MIN_ZOOM, Math.min(width / WORLD_WIDTH, height / WORLD_HEIGHT));
+    if (Math.abs(zoom - this.scale.zoom) > ZOOM_EPSILON) {
       // setZoom refreshes and emits RESIZE synchronously, re-entering fit() with the new
       // zoom, which then records the re-centred canvas position.
       this.scale.setZoom(zoom);
@@ -168,7 +174,7 @@ export class OfficeScene extends Phaser.Scene {
     this.canvasTop = canvas.top - parent.top;
   }
 
-  /** Current integer zoom of the 640x384 world; overlays scale their offsets with it. */
+  /** Current fractional zoom of the 640x384 world; overlays scale their offsets with it. */
   get zoom(): number {
     return this.scale.zoom;
   }
@@ -217,7 +223,7 @@ export class OfficeScene extends Phaser.Scene {
     this.game.loop.sleep();
   }
 
-  /** Walk; on arrival stand for IDLE_PAUSE_MS, then wander on. Leaving walks straight out. */
+  /** Walk; on arrival stand for IDLE_PAUSE_MS, then wander on. Leaving walks out without pausing. */
   private advance(character: Character, time: number, delta: number): Character {
     const moved = step(character, delta);
     if (moved.state === 'leaving' || moved.x !== moved.targetX || moved.y !== moved.targetY) {
@@ -268,11 +274,12 @@ export class OfficeScene extends Phaser.Scene {
     return sprite;
   }
 
-  /** Walk toward the target, or stand on the first frame of the direction last walked. */
+  /** Walk toward the next waypoint (else the target), or stand on the first frame of the direction last walked. */
   private animate(sprite: Phaser.GameObjects.Sprite, character: Character): void {
-    const dx = character.targetX - character.x;
-    const dy = character.targetY - character.y;
-    if (dx === 0 && dy === 0) {
+    const waypoint = character.path.at(0);
+    const dx = (waypoint?.x ?? character.targetX) - character.x;
+    const dy = (waypoint?.y ?? character.targetY) - character.y;
+    if (dx === 0 && dy === 0 && character.path.length === 0) {
       if (sprite.anims.isPlaying) {
         sprite.anims.pause(sprite.anims.currentAnim?.frames[0]);
       }
@@ -307,8 +314,8 @@ export function createOffice(parent: HTMLElement, assetsBaseUri: string): Office
     height: WORLD_HEIGHT,
     pixelArt: true,
     backgroundColor: '#1e1e1e',
-    // No FIT: the world is scaled by a whole-number zoom so pixels stay square (see fit()).
-    scale: { mode: Phaser.Scale.NONE, zoom: Phaser.Scale.MAX_ZOOM, autoCenter: Phaser.Scale.CENTER_BOTH },
+    // No FIT: the world is scaled by our own zoom (see fit()).
+    scale: { mode: Phaser.Scale.NONE, zoom: 1, autoCenter: Phaser.Scale.CENTER_BOTH },
     scene,
   });
   return scene;

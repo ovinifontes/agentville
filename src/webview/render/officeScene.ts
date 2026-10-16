@@ -270,9 +270,10 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Walk toward the target, or stand on the first frame of the direction last walked. */
   private animate(sprite: Phaser.GameObjects.Sprite, character: Character): void {
-    const dx = character.targetX - character.x;
-    const dy = character.targetY - character.y;
-    if (dx === 0 && dy === 0) {
+    const waypoint = character.path.at(0);
+    const dx = (waypoint?.x ?? character.targetX) - character.x;
+    const dy = (waypoint?.y ?? character.targetY) - character.y;
+    if (dx === 0 && dy === 0 && character.path.length === 0) {
       if (sprite.anims.isPlaying) {
         sprite.anims.pause(sprite.anims.currentAnim?.frames[0]);
       }

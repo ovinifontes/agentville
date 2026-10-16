@@ -119,12 +119,12 @@
         },
         {
           "command": "agentville.showAllProjects",
-          "when": "view == agentville.world && config.agentville.enabled && !config.agentville.showAllProjects",
+          "when": "view == agentville.world && config.agentville.enabled && workspaceFolderCount > 0 && !config.agentville.showAllProjects",
           "group": "navigation@3"
         },
         {
           "command": "agentville.showThisProjectOnly",
-          "when": "view == agentville.world && config.agentville.enabled && config.agentville.showAllProjects",
+          "when": "view == agentville.world && config.agentville.enabled && workspaceFolderCount > 0 && config.agentville.showAllProjects",
           "group": "navigation@3"
         }
       ],

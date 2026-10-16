@@ -74,8 +74,8 @@ export function reconcile(cast: readonly Character[], agents: readonly AgentView
     if (agent) {
       seen.add(character.id);
       // Back before it reached the door: stop where it stands — still 'leaving', it would walk
-      // out and wait at the door forever. Its place was forgotten on leaving, so on the next
-      // frame it claims a spot for its activity (or wanders if that kind is full).
+      // out and wait at the door forever. Its place was forgotten on leaving, so later in this same
+      // update() followActivity claims a spot for its activity (or wanders if that kind is full).
       kept.push(
         character.state === 'leaving'
           ? { ...character, agent, state: 'idle', targetX: character.x, targetY: character.y, path: [] }

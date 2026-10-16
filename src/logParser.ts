@@ -115,6 +115,11 @@ export class LogParser {
       // detectSendMessageResume). The detector calls this only when a SendMessage target matches
       // nothing, so the sidecar read stays off the common path. Antigravity never writes
       // SendMessage, so it never fires there.
+      // Known gap (pre-existing): a subagent launched while the session was in a git worktree has
+      // its sidecar under the worktree's projects dir. If the session has returned to the base
+      // project by the SendMessage's line, a cold parse's resolve looks in the base dir only
+      // (candidateMetadataDirs follows the current projectPath) and misses it, while an incremental
+      // parse already enriched it back when projectPath was the worktree — so the two can differ.
       const resolveAgentIds = (): void => {
         enrichSubagentMetadata({ ...session, subagents: Array.from(currentSubagents.values()) });
       };
@@ -123,8 +128,9 @@ export class LogParser {
       }
 
       session.subagents = Array.from(currentSubagents.values());
-      // Runs once per parseNewLines() call (i.e. only when this file actually grew), and only
-      // reads a sidecar for subagents still missing a name/model — never per render.
+      // Runs once per parseNewLines() call (i.e. only when this file actually grew), besides the
+      // mid-loop resolveAgentIds above, and only reads a sidecar for subagents still missing a
+      // name, model or agentId (subagentMetadata.ts's needsSidecarData) — never per render.
       enrichSubagentMetadata(session);
       session.lastInteractionTime = stats.mtimeMs;
 

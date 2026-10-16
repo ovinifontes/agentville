@@ -3,7 +3,8 @@ import type { LogEntry } from './logParser';
 import { detectForkedSkillLaunch } from './forkedSkillDetector';
 
 /** Detect subagent starts/completions from one log entry and mutate the running map.
- * `resolveAgentIds`, when given, fills `.agentId` on the map's subagents from their sidecars —
+ * `resolveAgentIds`, when given, enriches the map's subagents from their sidecars (`.agentId`, and
+ * a placeholder 'Agent' name or a missing model too — it is subagentMetadata.ts's enrichment) —
  * called only when a SendMessage target matches nothing (see detectSendMessageResume). */
 export function detectSubagents(
   json: LogEntry,

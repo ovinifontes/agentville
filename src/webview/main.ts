@@ -46,6 +46,7 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
   switch (message.type) {
     case 'snapshot':
       agents = message.agents;
+      scene.setActive(true);
       scene.setAgents(message.agents);
       overflow.textContent = message.truncated > 0 ? `+${message.truncated} waiting` : '';
       overflow.classList.toggle('hidden', message.truncated === 0);
@@ -54,7 +55,9 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
       feed.render(message.agentId, message.entries);
       return;
     case 'monitoringDisabled':
-      scene.setAgents([]);
+      // Static disabled state (spec §9): no feed, no characters, no frame loop.
+      feed.close();
+      scene.setActive(false);
       overflow.textContent = 'Monitoring is disabled.';
       overflow.classList.remove('hidden');
       return;

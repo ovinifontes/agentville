@@ -31,6 +31,8 @@ const OFFICE_CSS = `
     border-radius: 10px;
     cursor: pointer;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .name-tag {
     position: absolute;
@@ -235,13 +237,15 @@ export class OfficePanel {
     const script = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'webview.js'));
     const assets = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'office'));
     const nonce = Buffer.from(`${Date.now()}-${Math.random()}`).toString('base64').slice(0, 32);
-    // Phaser's WebGL renderer needs blob: for its shaders, and its loader fetches images over
-    // XHR from the extension resource root. No remote origin is allowed.
+    // Phaser's loader fetches images over XHR from the extension resource root and hands them
+    // to <img> as blob: URLs. Scripts need only the nonce: Phaser compiles its WebGL shaders
+    // from strings, not blob: scripts, and both renderers load under this policy. No remote
+    // origin is allowed.
     const csp = [
       "default-src 'none'",
       `img-src ${webview.cspSource} blob: data:`,
       `style-src ${webview.cspSource} 'unsafe-inline'`,
-      `script-src 'nonce-${nonce}' blob:`,
+      `script-src 'nonce-${nonce}'`,
       `connect-src ${webview.cspSource} blob:`,
     ].join('; ');
     return `<!DOCTYPE html>

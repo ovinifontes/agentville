@@ -43,10 +43,6 @@ export class FeedPanel {
     this.onClose();
   }
 
-  get openAgentId(): string | undefined {
-    return this.agentId;
-  }
-
   render(agentId: string, entries: readonly FeedEntry[]): void {
     if (agentId !== this.agentId) {
       return;
@@ -63,6 +59,7 @@ export class FeedPanel {
       item.append(meta, body);
       this.list.appendChild(item);
     }
-    this.list.scrollTop = this.list.scrollHeight;
+    // The aside scrolls (.feed has overflow-y: auto); the list inside it never does.
+    this.element.scrollTop = this.element.scrollHeight;
   }
 }

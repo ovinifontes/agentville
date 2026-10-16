@@ -91,6 +91,9 @@ export class OfficeScene extends Phaser.Scene {
   // so the per-frame position report never forces a layout read.
   private canvasLeft = 0;
   private canvasTop = 0;
+  // Monitoring off (spec §9): asked for by setActive(false), carried out by the next update().
+  private sleepRequested = false;
+  private asleep = false;
 
   constructor(
     private readonly assetsBaseUri: string,
@@ -174,17 +177,44 @@ export class OfficeScene extends Phaser.Scene {
     this.pending = [...agents];
   }
 
+  /**
+   * false: empty the office and stop the frame loop once that empty frame is drawn — a static
+   * disabled state that costs no CPU. true: wake the loop again. The sleep itself happens in
+   * update(), because `this.game` (and its loop) only exists once Phaser has booted the scene.
+   */
+  setActive(active: boolean): void {
+    this.sleepRequested = !active;
+    if (active && this.asleep) {
+      this.asleep = false;
+      this.game.loop.wake();
+    }
+  }
+
   onCharacterPositions(callback: (positions: RenderedPosition[]) => void): void {
     this.positionListener = callback;
   }
 
   update(time: number, delta: number): void {
+    if (this.sleepRequested) {
+      this.sleepLoop();
+      return;
+    }
     if (this.pending.length > 0 || this.cast.length > 0) {
       this.cast = reconcile(this.cast, this.pending);
     }
     this.cast = this.cast.map((character) => this.advance(character, time, delta));
     this.syncSprites();
     this.emitPositions();
+  }
+
+  /** Drops every character and its overlays, then sleeps the loop after this frame renders. */
+  private sleepLoop(): void {
+    this.cast = [];
+    this.pending = [];
+    this.syncSprites();
+    this.emitPositions();
+    this.asleep = true;
+    this.game.loop.sleep();
   }
 
   /** Walk; on arrival stand for IDLE_PAUSE_MS, then wander on. Leaving walks straight out. */

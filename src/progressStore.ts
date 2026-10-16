@@ -12,17 +12,21 @@ import { randomUUID } from 'crypto';
 import { applyTick, pauseProgress } from './progressRules';
 import {
   applyRequests,
+  cleanStaleTemps,
   docKey,
   emptyDoc,
   leaseRole,
   listRequests,
-  parseDoc,
+  loadForHolder,
   parseLease,
   parseRequest,
+  readDoc,
   readText,
   removeFile,
+  saveDoc,
   writeAtomic,
   type Lease,
+  type LeaseRole,
   type ProgressDoc,
   type ProgressRequest,
 } from './progressSync';
@@ -63,7 +67,8 @@ export class ProgressStore implements vscode.Disposable {
     } catch (error) {
       logDebug(`ProgressStore: cannot create ${dir}: ${String(error)}`);
     }
-    this.doc = this.readDoc() ?? emptyDoc();
+    const onDisk = readDoc(this.docFile);
+    this.doc = typeof onDisk === 'object' ? onDisk : emptyDoc();
     this.subscriptions = [
       provider.onDidChangeSessions(() => {
         this.tick();
@@ -84,7 +89,10 @@ export class ProgressStore implements vscode.Disposable {
   }
 
   reset(): void {
-    this.request({ kind: 'reset', generation: this.doc.generation + 1 });
+    // Above both memory and the file, so a reset requested from a stale view is never dropped.
+    const onDisk = readDoc(this.docFile);
+    const fileGeneration = typeof onDisk === 'object' ? onDisk.generation : 0;
+    this.request({ kind: 'reset', generation: Math.max(this.doc.generation, fileGeneration) + 1 });
     this.changed.fire();
   }
 
@@ -94,7 +102,7 @@ export class ProgressStore implements vscode.Disposable {
     if (this.holding) {
       // Synchronous, so a restart resumes from exactly here; releasing lets the next window take over now.
       this.save();
-      if (this.readLease()?.holder === this.id) removeFile(this.leaseFile);
+      this.release();
     }
     this.changed.dispose();
   }
@@ -136,18 +144,24 @@ export class ProgressStore implements vscode.Disposable {
     if (text === null) return false; // never claim a lease that cannot be read
     const role = leaseRole(parseLease(text), this.id, now);
     if (role === 'follow') return false;
-    if (role !== 'hold' && !this.writeLease(now)) return false;
-    // Two windows can claim a stale lease at once; the rename that landed last wins.
-    if (role === 'take' && this.readLease()?.holder !== this.id) return false;
-    // After a takeover, memory may be older than the file another holder wrote meanwhile.
-    if (this.holding && role !== 'take') return true;
-    return this.takeOver();
+    if (this.holding && role !== 'take') return role === 'hold' || this.writeLease(now);
+    return this.takeOver(role, now);
   }
 
-  /** Start from the file (state, counted ids, generation); the 60 s credit cap bounds the gap. */
-  private takeOver(): boolean {
-    const doc = this.readDoc();
-    if (!doc) return false;
+  /**
+   * Claim the lease only over a progress file this window can start from: an unreadable or
+   * newer-schema file leaves every window following. Once the lease is ours, start from the file
+   * as it is then (another holder may have written it meanwhile; the 60 s credit cap bounds the gap).
+   */
+  private takeOver(role: LeaseRole, now: number): boolean {
+    const before = readDoc(this.docFile);
+    if (before === 'error' || before === 'newer') return this.release();
+    if (role !== 'hold' && !this.writeLease(now)) return false;
+    // Two windows can claim a stale lease at once; the rename that landed last wins.
+    if (this.readLease()?.holder !== this.id) return false;
+    const doc = loadForHolder(this.docFile, now);
+    if (!doc) return this.release();
+    cleanStaleTemps(this.dir, now);
     this.doc = doc;
     this.savedKey = docKey(doc);
     this.holding = true;
@@ -155,15 +169,21 @@ export class ProgressStore implements vscode.Disposable {
     return true;
   }
 
+  /** Stop holding and, if the lease is ours, delete it so another window can take over at once. */
+  private release(): false {
+    this.holding = false;
+    clearTimeout(this.saveTimer);
+    this.saveTimer = undefined;
+    if (this.readLease()?.holder === this.id) removeFile(this.leaseFile);
+    return false;
+  }
+
   private follow(): void {
-    if (this.holding) {
-      this.holding = false;
-      clearTimeout(this.saveTimer);
-      this.saveTimer = undefined;
-    }
-    const onDisk = this.readDoc();
-    // A reset this window requested stays visible until the holder has written it.
-    if (onDisk && onDisk.generation >= this.doc.generation) this.doc = onDisk;
+    if (this.holding) this.release();
+    const onDisk = readDoc(this.docFile);
+    // Only a valid doc replaces memory: an unreadable, corrupt or newer-schema file keeps the last
+    // view. A reset this window requested stays visible until the holder has written it.
+    if (typeof onDisk === 'object' && onDisk.generation >= this.doc.generation) this.doc = onDisk;
   }
 
   /** Apply other windows' requests, save, then delete them: a crash in between re-applies them (idempotent). */
@@ -199,15 +219,12 @@ export class ProgressStore implements vscode.Disposable {
   private save(): boolean {
     // A window resumed from suspension may have lost the lease without having ticked yet.
     if (this.readLease()?.holder !== this.id) return false;
-    const onDisk = this.readDoc();
-    if (onDisk && onDisk.generation > this.doc.generation) {
-      this.doc = onDisk;
-      this.savedKey = docKey(onDisk);
-      return true;
-    }
-    const ok = writeAtomic(this.docFile, JSON.stringify(this.doc), this.id);
-    if (ok) this.savedKey = docKey(this.doc);
-    return ok;
+    const saved = saveDoc(this.docFile, this.doc, this.id);
+    // Unreadable or newer-schema file, or a failed write: never keep a lease it cannot write under.
+    if (!saved) return this.release();
+    this.doc = saved;
+    this.savedKey = docKey(saved);
+    return true;
   }
 
   private writeLease(now: number): boolean {
@@ -217,10 +234,5 @@ export class ProgressStore implements vscode.Disposable {
 
   private readLease(): Lease | null {
     return parseLease(readText(this.leaseFile) ?? '');
-  }
-
-  private readDoc(): ProgressDoc | null {
-    const text = readText(this.docFile);
-    return text === null ? null : parseDoc(text);
   }
 }

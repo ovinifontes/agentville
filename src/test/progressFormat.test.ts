@@ -8,6 +8,7 @@ describe('tagText', () => {
   });
   it('shows just the name without a level', () => {
     expect(tagText('reader', undefined)).toBe('reader');
+    expect(tagText('reader', 1)).toBe('reader');
   });
 });
 

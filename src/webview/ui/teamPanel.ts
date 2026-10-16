@@ -60,6 +60,8 @@ export class TeamPanel {
   private readonly button: HTMLButtonElement;
   private readonly panel: HTMLElement;
   private readonly body: HTMLElement;
+  private latest: ProgressView | undefined;
+  private paintedKey = '';
 
   constructor(root: HTMLElement) {
     this.button = el('button', 'team-button hidden', '🏆');
@@ -75,8 +77,9 @@ export class TeamPanel {
     this.panel.setAttribute('aria-label', 'Team progress');
     this.body = el('div');
     this.panel.appendChild(this.body);
-    this.panel.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
+    // On the shared root so Escape works with focus on the trophy button or inside the panel.
+    root.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !this.panel.classList.contains('hidden')) {
         this.toggle(false);
         this.button.focus();
       }
@@ -90,11 +93,23 @@ export class TeamPanel {
       this.toggle(false);
       return;
     }
+    this.latest = progress;
+    this.paint();
+  }
+
+  /** Rebuilds the DOM only while open and when the data changed since the last paint. */
+  private paint(): void {
+    const progress = this.latest;
+    if (!progress || this.panel.classList.contains('hidden')) return;
+    const key = JSON.stringify(progress);
+    if (key === this.paintedKey) return;
+    this.paintedKey = key;
     this.body.replaceChildren(...header(progress), ...ranking(progress), ...achievements(progress));
   }
 
   private toggle(open: boolean): void {
     this.panel.classList.toggle('hidden', !open);
+    this.paint();
     this.button.setAttribute('aria-expanded', String(open));
   }
 }
